@@ -131,8 +131,15 @@ def check_url(
     *,
     resolver: Resolver = default_resolver,
     allowed_schemes: frozenset[str] = frozenset({"https"}),
+    resolve: bool = True,
 ) -> CheckedURL:
-    """Validate ``url`` for fetching. Raises ``URLRejectedError`` on any doubt."""
+    """Validate ``url`` for fetching. Raises ``URLRejectedError`` on any doubt.
+
+    ``resolve=False`` is for proxy mode only: the egress proxy resolves the name and
+    refuses private, loopback, link-local and metadata destinations itself (generated
+    squid.conf, ``private_dst``), so the client keeps every other check but does not need
+    DNS. The returned ``addresses`` is then empty and nothing may be pinned.
+    """
     if len(url) > MAX_URL_LENGTH:
         raise URLRejectedError(url, "too long")
     if _FORBIDDEN_CHARS.search(url):
@@ -164,6 +171,8 @@ def check_url(
     if not allowlist.allows(host):
         raise URLRejectedError(url, f"host {host!r} not on allowlist")
 
+    if not resolve:
+        return CheckedURL(url=url, scheme=scheme, host=host, port=port, addresses=())
     addresses = tuple(resolver(host, port))
     if not addresses:
         raise URLRejectedError(url, "host resolved to no addresses")
@@ -183,9 +192,12 @@ def check_redirect(
     max_hops: int = 3,
     resolver: Resolver = default_resolver,
     allowed_schemes: frozenset[str] = frozenset({"https"}),
+    resolve: bool = True,
 ) -> CheckedURL:
     """Re-apply the full policy to a redirect target (relative or absolute)."""
     if hops_so_far >= max_hops:
         raise URLRejectedError(location, f"more than {max_hops} redirects")
     target = urljoin(previous.url, location.strip())
-    return check_url(target, allowlist, resolver=resolver, allowed_schemes=allowed_schemes)
+    return check_url(
+        target, allowlist, resolver=resolver, allowed_schemes=allowed_schemes, resolve=resolve
+    )

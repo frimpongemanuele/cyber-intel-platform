@@ -187,3 +187,26 @@ def test_redirect_hop_limit() -> None:
 )
 def test_is_public_address(addr: str, public: bool) -> None:
     assert is_public_address(addr) is public
+
+
+def test_proxy_mode_skips_dns_but_keeps_every_other_check() -> None:
+    calls: list[str] = []
+
+    def resolver(host: str, port: int) -> list[str]:
+        calls.append(host)
+        return ["127.0.0.1"]  # would be rejected if it were consulted
+
+    allow = HostAllowlist(["www.cisa.gov"])
+    checked = check_url("https://www.cisa.gov/feed", allow, resolver=resolver, resolve=False)
+    assert checked.addresses == () and calls == []
+    for bad in (
+        "https://evil.example/",
+        "https://127.0.0.1/",
+        "https://[::1]/",
+        "https://www.cisa.gov@evil.example/",
+        "http://www.cisa.gov/",
+        "https://www.cisa.gov:8443/",
+    ):
+        with pytest.raises(URLRejectedError):
+            check_url(bad, allow, resolver=resolver, resolve=False)
+    assert calls == []

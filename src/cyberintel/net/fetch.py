@@ -13,8 +13,11 @@ Every request:
 
 Proxy mode: if an egress proxy is configured (the homelab deployment uses an allowlisting
 forward proxy), the client sends ``CONNECT hostname:443`` and the *proxy* resolves DNS, so
-IP pinning is not possible at this layer. The URL guard still runs, and the proxy's own
-destination ACL (deny private ranges) becomes the rebinding defence. The trade-off is
+IP pinning is not possible at this layer. The URL guard still runs (allowlist, scheme,
+port, IP-literal, userinfo and redirect checks) but skips local DNS, which the collector's
+internal network deliberately does not have; the proxy's destination ACL (deny private
+ranges after *its* resolution) is the address and rebinding defence, verified in CI by
+deploy/ci/egress_probe.py. The trade-off is
 recorded in ENGINEERING_LOG.md.
 
 Residual risk: httpx inflates ``Content-Encoding: gzip`` per network chunk without an
@@ -111,7 +114,7 @@ class SafeFetcher:
             req_headers["If-Modified-Since"] = validators.last_modified
 
         try:
-            checked = check_url(url, self._allow, resolver=self._resolver)
+            checked = check_url(url, self._allow, resolver=self._resolver, resolve=self._pin)
         except URLRejectedError as exc:
             raise FetchRejectedError(str(exc)) from None
 
@@ -131,6 +134,7 @@ class SafeFetcher:
                             hops_so_far=hop,
                             max_hops=self._max_redirects,
                             resolver=self._resolver,
+                            resolve=self._pin,
                         )
                     except URLRejectedError as exc:
                         raise FetchRejectedError(f"redirect blocked: {exc}") from None
