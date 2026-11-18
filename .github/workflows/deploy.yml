@@ -18,7 +18,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - name: Dockerfile lint (hadolint)
         run: |
@@ -45,7 +45,7 @@ jobs:
     # maintainer can review and commit updates; the build itself only uses committed pins.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
@@ -80,7 +80,7 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: cit
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - name: Build images
         run: docker compose build
