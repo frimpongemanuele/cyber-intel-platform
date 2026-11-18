@@ -20,6 +20,7 @@ from cyberintel.ai.prompt import PROMPT_SHA256, PROMPT_VERSION, build_prompt, in
 from cyberintel.ai.providers import Provider, ProviderError
 from cyberintel.ai.schema import AnalysisInput, CveFact, Evidence
 from cyberintel.ai.validate import MAX_RAW_CHARS, validate_output
+from cyberintel.security_events import emit
 
 MAX_CONSECUTIVE_ERRORS = 3
 
@@ -137,6 +138,7 @@ def run(
             continue
         if repo.tokens_on(today) >= daily_token_cap:
             report.stopped = "daily token cap reached"
+            emit("ai.token_cap_reached", provider=provider.name, cap=daily_token_cap)
             break
         try:
             record = analyse(given, provider)
@@ -145,16 +147,27 @@ def run(
             consecutive_errors += 1
             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                 report.stopped = "too many consecutive provider errors"
+                emit("ai.provider_failing", provider=provider.name, errors=consecutive_errors)
                 break
             continue
         consecutive_errors = 0
         repo.record(cand.id, record, today)
         report.analysed += 1
+        if record.injection_suspected:
+            emit("ai.injection_suspected", story=cand.slug, provider=provider.name)
         if record.validated:
             report.accepted += 1
         else:
             report.rejected += 1
             report.rejected_slugs.append(cand.slug)
+            # what the gate caught (reasons are validator text, already length-capped)
+            emit(
+                "ai.output_rejected",
+                story=cand.slug,
+                provider=provider.name,
+                model=provider.model,
+                reasons=list(record.rejected_reasons[:3]),
+            )
     return report
 
 

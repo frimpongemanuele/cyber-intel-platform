@@ -90,6 +90,7 @@ services:
       <<: *app-env
       PGUSER: cit_owner
       CIT_DB_PASSWORD_FILE: /run/secrets/pg_owner_password
+      CIT_SERVICE: migrate
     secrets: [pg_owner_password]
     mem_limit: 256m
     networks: [data]
@@ -122,6 +123,7 @@ services:
     environment:
       <<: *app-env
       PGUSER: cit_ingest
+      CIT_SERVICE: ingest
       CIT_DB_PASSWORD_FILE: /run/secrets/pg_ingest_password
       CIT_EGRESS_PROXY: http://egress:3128
       CIT_NVD_API_KEY_FILE: /run/secrets/nvd_api_key # may be an empty file
@@ -139,6 +141,7 @@ services:
     environment:
       <<: *app-env
       PGUSER: cit_web
+      CIT_SERVICE: web
       CIT_DB_PASSWORD_FILE: /run/secrets/pg_web_password
       CIT_WEB_PASSWORD_HASH_FILE: /run/secrets/web_password_hash
       CIT_WEB_SECRET_FILE: /run/secrets/web_session_secret
@@ -193,6 +196,7 @@ services:
     environment:
       <<: *app-env
       PGUSER: cit_ai
+      CIT_SERVICE: ai
       CIT_DB_PASSWORD_FILE: /run/secrets/pg_ai_password
       CIT_AI_PROVIDER: ${CIT_AI_PROVIDER:-none}
       CIT_AI_MODEL: ${CIT_AI_MODEL:-}

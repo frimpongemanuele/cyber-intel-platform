@@ -38,8 +38,15 @@ from cyberintel.collectors.run import (
     iter_nvd_modified,
 )
 from cyberintel.net.decompress import DecompressionError
-from cyberintel.net.types import Fetcher, FetchError, FetchResult, Validators
+from cyberintel.net.types import (
+    Fetcher,
+    FetchError,
+    FetchRejectedError,
+    FetchResult,
+    Validators,
+)
 from cyberintel.parsing.feeds import Feed, FeedError
+from cyberintel.security_events import emit
 from cyberintel.sources import Kind, Registry, Source
 
 # Failures that mean "this source, this time" -- recorded, not raised.
@@ -172,6 +179,15 @@ def run_source(
         result = _collect_and_store(source, fetcher, store, state, started, nvd_api_key)
     except SOURCE_ERRORS as exc:
         message = f"{type(exc).__name__}: {exc}"[:500]
+        if isinstance(exc, FetchRejectedError):
+            # the SSRF guard refused a URL or redirect: a poisoned or hijacked source
+            emit("fetch.url_rejected", source=source.name, reason=str(exc))
+        emit(
+            "source.failed",
+            source=source.name,
+            error_type=type(exc).__name__,
+            http_status=getattr(exc, "status", None),
+        )
         finished = clock()
         store.record_failure(source.name, message, finished)
         store.record_fetch_run(
@@ -204,6 +220,8 @@ def run_source(
         records_rejected=result.rejected,
         error=None,
     )
+    if result.rejected:
+        emit("feed.records_quarantined", source=source.name, count=result.rejected)
     return RunReport(source.name, outcome, result.ok, result.rejected)
 
 
