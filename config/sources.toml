@@ -70,6 +70,10 @@ kind = "feed"
 url = "https://msrc.microsoft.com/blog/feed"
 trust_tier = "primary"
 xml_allow_doctype = true  # declares a <!DOCTYPE>; entities/external refs still forbidden
+# Disabled 2026-11-18: feed is not well-formed XML (invalid token, line 124). We do not use
+# lenient/recovering XML parsers. Coverage remains via microsoft-security-blog and CVE.org
+# (Microsoft is a CNA). Re-check monthly: `pytest -m network` after re-enabling.
+enabled = false
 
 [[source]]
 name = "microsoft-security-blog"
