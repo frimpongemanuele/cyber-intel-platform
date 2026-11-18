@@ -157,7 +157,10 @@
 <!-- 3. Host firewall: the dashboard container tried to open an outbound connection -->
 <group name="cyber_intel,cit_host,">
 
+  <!-- Kernel lines with SRC=/DST= are decoded by Wazuh's iptables decoder and land in
+       built-in rule 4100 first (found by the CI replay), so this rule is its child. -->
   <rule id="100140" level="13">
+    <if_sid>4100</if_sid>
     <match>CIT-WEB-EGRESS </match>
     <description>cyber-intel: dashboard container attempted an outbound connection (compromise indicator)</description>
     <mitre><id>T1041</id><id>T1071</id></mitre>
@@ -170,11 +173,13 @@
 <group name="cyber_intel,cit_docker,">
 
   <!-- Docker runs health checks through exec. These exact commands are the platform's own
-       health checks (compose.yaml); silence them so a real exec stands out. -->
+       health checks (compose.yaml); silence them so a real exec stands out. "<>" is written
+       as \x3c\x3e: Wazuh's XML parser does not decode &lt;/&gt; entities (found by the CI
+       replay). tests/test_wazuh_rules.py keeps this list equal to compose.yaml. -->
   <rule id="100150" level="0">
     <if_sid>87907</if_sid>
     <field name="docker.Actor.Attributes.com.docker.compose.project" type="pcre2">^cit$</field>
-    <field name="docker.Action" type="pcre2">^exec_start: (pg_isready -h /var/run/postgresql -U postgres -d cit|python -m cyberintel\.web\.healthcheck|bash -c exec 3&lt;&gt;/dev/tcp/127\.0\.0\.1/3128)$</field>
+    <field name="docker.Action" type="pcre2">^exec_start: (pg_isready -h /var/run/postgresql -U postgres -d cit|python -m cyberintel\.web\.healthcheck|bash -c exec 3\x3c\x3e/dev/tcp/127\.0\.0\.1/3128)$</field>
     <description>cyber-intel: container health check (expected)</description>
   </rule>
 
