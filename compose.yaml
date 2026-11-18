@@ -110,7 +110,8 @@ services:
       - /run:size=1m,mode=1777
     networks: [egress, ingest_out, ai_out]
     healthcheck:
-      test: ["CMD", "/usr/sbin/squid", "-k", "check", "-f", "/etc/squid/squid.conf"]
+      # TCP connect to the ingest listener (bash built-in; no extra tools in the image)
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3128"]
       interval: 30s
       timeout: 5s
       retries: 3

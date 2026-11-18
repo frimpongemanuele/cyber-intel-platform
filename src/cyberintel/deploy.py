@@ -33,9 +33,11 @@ _HOST = re.compile(r"^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z
 PRIVATE_DST = (
     "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
     "172.16.0.0/12", "192.0.0.0/24", "192.168.0.0/16", "198.18.0.0/15", "224.0.0.0/4",
-    "240.0.0.0/4", "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "fc00::/7",
-    "fe80::/10", "ff00::/8",
+    "240.0.0.0/4", "::/128", "::1/128", "64:ff9b::/96", "fc00::/7", "fe80::/10", "ff00::/8",
 )  # fmt: skip
+# Not listed: ::ffff:0:0/96. Squid stores IPv4 addresses as IPv4-mapped IPv6, so that
+# entry would mean "all of IPv4" (found in the first CI run; squid warned and dropped it).
+# Mapped forms of private IPv4 ranges are covered by the IPv4 entries above.
 
 
 def _check_hosts(hosts: Iterable[str]) -> list[str]:
@@ -84,6 +86,8 @@ def render_squid(ingest_hosts: Iterable[str], ai_hosts: Iterable[str] = ()) -> s
         "cache_store_log none",
         "logfile_rotate 0",
         "shutdown_lifetime 2 seconds",
+        "# ICMP pinger needs CAP_NET_RAW, which the container deliberately does not have",
+        "pinger_enable off",
         "",
     ]
     return "\n".join(lines)

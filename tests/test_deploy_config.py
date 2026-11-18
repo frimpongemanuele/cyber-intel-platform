@@ -61,9 +61,16 @@ def test_private_ranges_cover_metadata_and_lan() -> None:
         "172.16.0.0/12",
         "100.64.0.0/10",
         "fc00::/7",
-        "::ffff:0:0/96",
     ):
         assert net in conf
+    # squid represents IPv4 as mapped IPv6, so this entry would mean "all of IPv4"
+    assert "::ffff:0:0/96" not in conf
+
+
+def test_no_trailing_comments_on_directives() -> None:
+    # squid.conf has no inline comments: "x on  # note" passes "# note" as arguments
+    for line in render_squid(["a.example"], ["b.example"]).splitlines():
+        assert line.startswith("#") or "#" not in line, line
 
 
 @pytest.mark.parametrize(
