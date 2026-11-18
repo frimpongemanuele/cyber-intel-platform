@@ -11,6 +11,9 @@ from html.parser import HTMLParser
 from typing import Any, ClassVar
 
 import pytest
+
+pytest.importorskip("starlette")
+pytest.importorskip("jinja2")
 from asgi import Resp, request
 
 from cyberintel.web.app import create_app

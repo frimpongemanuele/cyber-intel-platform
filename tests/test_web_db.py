@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytest.importorskip("starlette")
+pytest.importorskip("jinja2")
 from asgi import request
 from pgharness import _psql, enabled
 
