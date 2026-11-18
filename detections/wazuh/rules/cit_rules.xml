@@ -1,0 +1,210 @@
+<!--
+  Cyber-intel platform detections for Wazuh 4.14 (docs/DETECTIONS.md).
+  Rule IDs 100100-100199. Installed into /var/ossec/etc/rules/ by detections/wazuh/install.sh
+  and tested in CI against the official manager image (detections/wazuh/tests/).
+-->
+
+<!-- 1. Platform security events (logs/<service>/security.json, JSON input) -->
+<group name="cyber_intel,cit_platform,">
+
+  <rule id="100100" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="cit_event" type="pcre2">^[a-z_]+\.[a-z_]+$</field>
+    <description>cyber-intel: platform security event $(cit_event)</description>
+  </rule>
+
+  <rule id="100101" level="5">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^auth\.login_failed$</field>
+    <description>cyber-intel: dashboard login failed (client $(client))</description>
+    <mitre><id>T1110.001</id></mitre>
+    <group>cit_auth_failed,</group>
+  </rule>
+
+  <rule id="100102" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>100101</if_matched_sid>
+    <description>cyber-intel: dashboard password brute force (5+ failures in 5 minutes)</description>
+    <mitre><id>T1110</id></mitre>
+    <group>cit_bruteforce,</group>
+  </rule>
+
+  <rule id="100103" level="10">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^auth\.login_throttled$</field>
+    <description>cyber-intel: dashboard login throttled, attempt budget exhausted (client $(client))</description>
+    <mitre><id>T1110</id></mitre>
+    <group>cit_bruteforce,</group>
+  </rule>
+
+  <rule id="100104" level="3">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^auth\.login_succeeded$</field>
+    <description>cyber-intel: dashboard login succeeded (client $(client))</description>
+    <group>cit_auth_success,</group>
+  </rule>
+
+  <rule id="100105" level="12" timeframe="900">
+    <if_sid>100104</if_sid>
+    <if_matched_group>cit_bruteforce</if_matched_group>
+    <description>cyber-intel: dashboard login succeeded after a brute-force attempt</description>
+    <mitre><id>T1110</id><id>T1078</id></mitre>
+    <group>cit_compromise,</group>
+  </rule>
+
+  <rule id="100106" level="6">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^auth\.session_rejected$</field>
+    <description>cyber-intel: forged, tampered or expired session cookie presented (path $(path))</description>
+    <mitre><id>T1550.004</id></mitre>
+  </rule>
+
+  <rule id="100107" level="6">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^web\.csrf_refused$</field>
+    <description>cyber-intel: cross-site POST to $(path) refused</description>
+  </rule>
+
+  <rule id="100108" level="3">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^web\.host_rejected$</field>
+    <description>cyber-intel: request with unexpected Host header refused</description>
+    <group>cit_host_rejected,</group>
+  </rule>
+
+  <rule id="100109" level="7" frequency="20" timeframe="60">
+    <if_matched_sid>100108</if_matched_sid>
+    <description>cyber-intel: burst of unexpected Host headers (scanning or DNS rebinding)</description>
+    <mitre><id>T1595</id></mitre>
+  </rule>
+
+  <rule id="100110" level="10">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^fetch\.url_rejected$</field>
+    <description>cyber-intel: SSRF guard refused a URL from source $(source)</description>
+    <mitre><id>T1190</id></mitre>
+    <group>cit_poisoned_source,</group>
+  </rule>
+
+  <rule id="100111" level="3">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^source\.failed$</field>
+    <description>cyber-intel: source $(source) failed ($(error_type))</description>
+  </rule>
+
+  <rule id="100112" level="7">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^feed\.records_quarantined$</field>
+    <description>cyber-intel: malformed records quarantined from $(source)</description>
+    <mitre><id>T1565.001</id></mitre>
+  </rule>
+
+  <rule id="100113" level="7">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^ai\.output_rejected$</field>
+    <description>cyber-intel: AI output gate rejected a model answer for story $(story)</description>
+    <group>cit_prompt_injection,</group>
+  </rule>
+
+  <rule id="100114" level="7">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^ai\.injection_suspected$</field>
+    <description>cyber-intel: model reported instruction-like text in sources (story $(story))</description>
+    <group>cit_prompt_injection,</group>
+  </rule>
+
+  <rule id="100115" level="5">
+    <if_sid>100100</if_sid>
+    <field name="cit_event" type="pcre2">^ai\.(token_cap_reached|provider_failing)$</field>
+    <description>cyber-intel: AI layer degraded ($(cit_event))</description>
+  </rule>
+
+</group>
+
+<!-- 2. Container logs (Docker json-file input; attrs.CIT_SERVICE names the service) -->
+<group name="cyber_intel,cit_containers,">
+
+  <rule id="100130" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="attrs.CIT_SERVICE" type="pcre2">^[a-z]+$</field>
+    <description>cyber-intel: container log line from $(attrs.CIT_SERVICE)</description>
+  </rule>
+
+  <rule id="100131" level="10">
+    <if_sid>100130</if_sid>
+    <field name="attrs.CIT_SERVICE" type="pcre2">^egress$</field>
+    <field name="log" type="pcre2">TCP_DENIED/403</field>
+    <description>cyber-intel: egress proxy refused a destination (poisoned feed or compromised collector)</description>
+    <mitre><id>T1041</id><id>T1090</id></mitre>
+    <group>cit_egress_denied,</group>
+  </rule>
+
+  <rule id="100132" level="6">
+    <if_sid>100130</if_sid>
+    <field name="attrs.CIT_SERVICE" type="pcre2">^db$</field>
+    <field name="log" type="pcre2">password authentication failed for user</field>
+    <description>cyber-intel: database password authentication failed</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <rule id="100133" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>100132</if_matched_sid>
+    <description>cyber-intel: repeated database authentication failures</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+</group>
+
+<!-- 3. Host firewall: the dashboard container tried to open an outbound connection -->
+<group name="cyber_intel,cit_host,">
+
+  <rule id="100140" level="13">
+    <match>CIT-WEB-EGRESS </match>
+    <description>cyber-intel: dashboard container attempted an outbound connection (compromise indicator)</description>
+    <mitre><id>T1041</id><id>T1071</id></mitre>
+    <group>cit_compromise,</group>
+  </rule>
+
+</group>
+
+<!-- 4. Docker activity: health checks vs real commands inside platform containers -->
+<group name="cyber_intel,cit_docker,">
+
+  <!-- Docker runs health checks through exec. These exact commands are the platform's own
+       health checks (compose.yaml); silence them so a real exec stands out. -->
+  <rule id="100150" level="0">
+    <if_sid>87907</if_sid>
+    <field name="docker.Actor.Attributes.com.docker.compose.project" type="pcre2">^cit$</field>
+    <field name="docker.Action" type="pcre2">^exec_start: (pg_isready -h /var/run/postgresql -U postgres -d cit|python -m cyberintel\.web\.healthcheck|bash -c exec 3&lt;&gt;/dev/tcp/127\.0\.0\.1/3128)$</field>
+    <description>cyber-intel: container health check (expected)</description>
+  </rule>
+
+  <rule id="100151" level="10">
+    <if_sid>87907</if_sid>
+    <field name="docker.Actor.Attributes.com.docker.compose.project" type="pcre2">^cit$</field>
+    <description>cyber-intel: command executed inside platform container $(docker.Actor.Attributes.name): $(docker.Action)</description>
+    <mitre><id>T1609</id></mitre>
+    <group>cit_container_exec,</group>
+  </rule>
+
+</group>
+
+<!-- 5. File integrity: secrets and platform configuration -->
+<group name="cyber_intel,cit_fim,">
+
+  <rule id="100160" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">/deploy/secrets/</field>
+    <description>cyber-intel: platform secret file $(file) changed</description>
+    <mitre><id>T1098</id><id>T1565.001</id></mitre>
+    <group>cit_secret_change,</group>
+  </rule>
+
+  <rule id="100161" level="8">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">/(\.env|compose[^/]*\.yaml|squid\.conf)$|/deploy/(postgres|scripts)/</field>
+    <description>cyber-intel: platform configuration $(file) changed</description>
+    <mitre><id>T1565.001</id></mitre>
+    <group>cit_config_change,</group>
+  </rule>
+
+</group>

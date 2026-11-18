@@ -1,5 +1,6 @@
 #!/bin/sh
-# Install the cyber-intel collection block into the local Wazuh manager (run as root).
+# Install the cyber-intel collection block and detection rules into the local Wazuh
+# manager (run as root).
 #
 #   sudo detections/wazuh/install.sh [CIT_DIR]      # default /srv/cit
 #   sudo detections/wazuh/install.sh --uninstall
@@ -11,6 +12,7 @@ set -eu
 OSSEC="${WAZUH_HOME:-/var/ossec}"     # overridable for tests only
 SYSTEMCTL="${SYSTEMCTL:-systemctl}"
 CONF="$OSSEC/etc/ossec.conf"
+RULES_DST="$OSSEC/etc/rules/cit_rules.xml"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BEGIN="<!-- BEGIN cyber-intel-platform (managed by detections/wazuh/install.sh) -->"
 END="<!-- END cyber-intel-platform -->"
@@ -28,8 +30,19 @@ esac
 [ "$mode" = uninstall ] || [ -f "$CIT_DIR/compose.yaml" ] || {
     echo "no compose.yaml in $CIT_DIR" >&2; exit 1; }
 
-backup="$CONF.cit-backup.$(date -u +%Y%m%dT%H%M%SZ)"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup="$CONF.cit-backup.$stamp"
 cp -p "$CONF" "$backup"
+rules_backup=""
+if [ -f "$RULES_DST" ]; then
+    rules_backup="$RULES_DST.cit-backup.$stamp"
+    cp -p "$RULES_DST" "$rules_backup"
+fi
+
+rollback() {
+    cp -p "$backup" "$CONF"
+    if [ -n "$rules_backup" ]; then cp -p "$rules_backup" "$RULES_DST"; else rm -f "$RULES_DST"; fi
+}
 
 # drop any previous managed block (lines between the markers, inclusive)
 tmp="$(mktemp)"
@@ -44,6 +57,16 @@ if [ "$mode" = install ]; then
 fi
 cat "$tmp" >"$CONF" # keep owner, group and mode of the original file
 rm -f "$tmp"
+
+# detection rules (detections/wazuh/rules/cit_rules.xml)
+if [ "$mode" = install ]; then
+    mkdir -p "$(dirname "$RULES_DST")"
+    cp "$HERE/rules/cit_rules.xml" "$RULES_DST"
+    chmod 0660 "$RULES_DST"
+    if getent group wazuh >/dev/null 2>&1; then chown root:wazuh "$RULES_DST"; fi
+else
+    rm -f "$RULES_DST"
+fi
 
 if [ "$mode" = install ] && [ -z "${WAZUH_HOME:-}" ]; then
     # The Docker listener runs with the system python3 and needs the docker SDK. Use the
@@ -69,7 +92,7 @@ for daemon in wazuh-logcollector wazuh-syscheckd wazuh-modulesd wazuh-analysisd;
     fi
 done
 if [ -n "$failed" ]; then
-    cp -p "$backup" "$CONF"
+    rollback
     echo "restored $backup; wazuh-manager was not restarted" >&2
     exit 1
 fi
@@ -79,7 +102,7 @@ if $SYSTEMCTL restart wazuh-manager && sleep "${CIT_RESTART_WAIT:-5}" \
     echo "wazuh-manager restarted with the cyber-intel block ($mode); backup: $backup"
 else
     echo "wazuh-manager failed to restart: restoring $backup" >&2
-    cp -p "$backup" "$CONF"
+    rollback
     $SYSTEMCTL restart wazuh-manager || true
     exit 1
 fi
