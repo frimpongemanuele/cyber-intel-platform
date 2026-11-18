@@ -66,7 +66,8 @@ def test_migrations_apply_idempotently_and_roll_back(empty_db: str) -> None:
     with psycopg.connect(dbname=empty_db, autocommit=True) as c:
         assert migrate.apply(c) == ALL_VERSIONS
         assert migrate.apply(c) == []
-        assert table_count(c, "pg_tables", "schemaname = 'public'") == 14  # + schema_migrations
+        # 13 fact tables + 2 AI tables (0003) + schema_migrations
+        assert table_count(c, "pg_tables", "schemaname = 'public'") == 16
         assert migrate.rollback(c, 0) == ALL_VERSIONS[::-1]  # newest first
         assert table_count(c, "pg_tables", "schemaname = 'public'") == 1
         assert migrate.apply(c) == ALL_VERSIONS
