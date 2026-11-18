@@ -55,9 +55,11 @@ jobs:
           pip-compile --quiet --generate-hashes --allow-unsafe --strip-extras \
             --output-file /tmp/requirements.lock deploy/requirements.in
       - name: Resolve image digests
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          ollama_tag="$(curl -fsSL https://api.github.com/repos/ollama/ollama/releases/latest \
-            | python -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')"
+          # authenticated: the anonymous API limit is shared by every job on the runner IP
+          ollama_tag="$(gh api repos/ollama/ollama/releases/latest --jq '.tag_name | ltrimstr("v")')"
           for img in python:3.12-slim-bookworm debian:bookworm-slim postgres:16-bookworm \
                      "ollama/ollama:${ollama_tag}"; do
             d="$(docker buildx imagetools inspect "$img" | awk '/^Digest:/ {print $2; exit}')"
