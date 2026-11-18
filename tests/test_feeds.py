@@ -143,3 +143,70 @@ def test_field_lengths_are_capped() -> None:
 )
 def test_html_to_text(html: str, expected: str) -> None:
     assert html_to_text(html, 100) == expected
+
+
+# --------------------------------------------------------------------- per-source DOCTYPE opt-in
+
+
+def test_xml_doctype_profile_still_forbids_entities_and_external_refs() -> None:
+    assert feeds.XML_HARDENING_DOCTYPE_ALLOWED == {
+        "forbid_dtd": False,
+        "forbid_entities": True,
+        "forbid_external": True,
+    }
+
+
+def test_bare_doctype_requires_the_opt_in() -> None:
+    data = load("plain_doctype.xml")
+    with pytest.raises(FeedError, match="DTDForbidden"):
+        parse_feed(data)
+    feed = parse_feed(data, allow_doctype=True)
+    assert feed.title == "Doctype feed" and feed.items[0].url == "https://msrc.example/post"
+
+
+@pytest.mark.parametrize(
+    ("fixture", "match"),
+    [
+        ("xxe_file.xml", "bare"),  # internal subset declaring an external entity
+        ("xxe_ssrf.xml", "bare"),
+        ("billion_laughs.xml", "bare"),  # internal subset with entity expansion
+        ("external_dtd.xml", "bare"),  # SYSTEM identifier
+    ],
+)
+def test_opt_in_still_refuses_every_hostile_fixture(fixture: str, match: str) -> None:
+    with pytest.raises(FeedError, match=match):
+        parse_feed(load(fixture), allow_doctype=True)
+
+
+@pytest.mark.parametrize(
+    "doctype",
+    [
+        b'<!DOCTYPE rss PUBLIC "-//x//DTD x//EN" "http://attacker.example/x.dtd">',
+        b"<!DOCTYPE rss [ ]>",
+        b"<!doctype rss SYSTEM 'file:///etc/passwd'>",
+    ],
+)
+def test_opt_in_rejects_non_bare_doctypes(doctype: bytes) -> None:
+    data = b'<?xml version="1.0"?>' + doctype + b"<rss><channel><title>x</title></channel></rss>"
+    with pytest.raises(FeedError, match="bare"):
+        parse_feed(data, allow_doctype=True)
+
+
+def test_entity_layer_alone_blocks_xxe_if_doctype_check_were_bypassed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Defence in depth: even with the bare-DOCTYPE pre-check disabled, the parser profile
+    # itself must still refuse entity-based attacks.
+    import re
+
+    monkeypatch.setattr(feeds, "_BARE_DOCTYPE", re.compile(rb".*", re.DOTALL))
+    for fixture in ["xxe_file.xml", "xxe_ssrf.xml", "billion_laughs.xml"]:
+        with pytest.raises(FeedError, match="EntitiesForbidden"):
+            parse_feed(load(fixture), allow_doctype=True)
+
+
+def test_per_call_size_limit() -> None:
+    data = load("rss_ok.xml")
+    with pytest.raises(FeedError, match="limit"):
+        parse_feed(data, max_bytes=100)
+    assert parse_feed(data, max_bytes=len(data)).items

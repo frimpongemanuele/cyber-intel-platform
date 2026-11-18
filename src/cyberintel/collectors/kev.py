@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from cyberintel.collectors.common import RejectedRecord, brief_error, str_or_none
 from cyberintel.normalize import CVE_ID
 
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
@@ -55,14 +56,6 @@ class KevEntry(BaseModel):
     @classmethod
     def _cwe_format(cls, v: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(c for c in (s.strip() for s in v) if _CWE.match(c))
-
-
-class RejectedRecord(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    index: int
-    cve_id: str | None
-    error: str
 
 
 class KevCatalog(BaseModel):
@@ -116,7 +109,9 @@ def parse_kev(data: bytes) -> KevCatalog:
                 raise TypeError("row is not an object")
             entry = _row_to_entry(row)
         except (KeyError, TypeError, ValidationError) as exc:
-            rejected.append(RejectedRecord(index=i, cve_id=_str_or_none(cve), error=_brief(exc)))
+            rejected.append(
+                RejectedRecord(index=i, cve_id=str_or_none(cve), error=brief_error(exc))
+            )
             continue
         if entry.cve_id in seen:
             rejected.append(RejectedRecord(index=i, cve_id=entry.cve_id, error="duplicate cveID"))
@@ -132,19 +127,6 @@ def parse_kev(data: bytes) -> KevCatalog:
         entries=tuple(entries),
         rejected=tuple(rejected),
     )
-
-
-def _str_or_none(v: object) -> str | None:
-    return v[:40] if isinstance(v, str) else None
-
-
-def _brief(exc: Exception) -> str:
-    if isinstance(exc, KeyError):
-        return f"missing field {exc.args[0]!r}"
-    if isinstance(exc, ValidationError):
-        err = exc.errors()[0]
-        return f"{'.'.join(map(str, err['loc']))}: {err['msg']}"[:200]
-    return str(exc)[:200]
 
 
 def _parse_dt(v: object) -> datetime | None:

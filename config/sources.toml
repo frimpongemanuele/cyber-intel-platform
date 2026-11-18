@@ -1,0 +1,156 @@
+# Source registry. Every outbound fetch must come from here: the SSRF allowlist is
+# derived from these URLs (+ explicit extra_hosts for known redirect targets).
+#
+# trust_tier: primary   = authoritative or original research (advisories, CERTs, vendor
+#                         research teams, researcher blogs)
+#             secondary = journalism / aggregation (context, never sole evidence)
+#
+# Facts (KEV status, CVSS, EPSS) only ever come from the structured sources below.
+# RSS URLs are verified by the scheduled `network` CI job, not by memory.
+
+[[source]]
+name = "cisa-kev"
+kind = "kev"
+url = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+trust_tier = "primary"
+poll_minutes = 60
+min_interval_seconds = 10
+
+[[source]]
+name = "first-epss"
+kind = "epss"
+url = "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz"
+trust_tier = "primary"
+poll_minutes = 720
+min_interval_seconds = 10
+
+[[source]]
+name = "nvd-cve-api"
+kind = "nvd"
+url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+trust_tier = "primary"
+poll_minutes = 120
+# 5 requests / rolling 30 s without a key (=6 s); 50 / 30 s with a key (=0.6 s).
+# Stay under the limit with margin; the collector lowers this when a key is configured.
+min_interval_seconds = 6.5
+
+[[source]]
+name = "cve-org-records"
+kind = "cve5"
+url = "https://cveawg.mitre.org/api/cve/"
+trust_tier = "primary"
+poll_minutes = 120
+min_interval_seconds = 1
+
+[[source]]
+name = "mitre-attack-enterprise"
+kind = "attack"
+url = "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json"
+trust_tier = "primary"
+poll_minutes = 10080
+min_interval_seconds = 10
+enabled = false  # STIX parser lands in Phase 7; ~40+ MB file
+
+# ------------------------------------------------------------------ RSS / Atom: primary
+[[source]]
+name = "cisa-advisories"
+kind = "feed"
+url = "https://www.cisa.gov/cybersecurity-advisories/all.xml"
+trust_tier = "primary"
+
+[[source]]
+name = "google-project-zero"
+kind = "feed"
+url = "https://projectzero.google/feed.xml"  # moved from googleprojectzero.blogspot.com (found by network CI)
+trust_tier = "primary"
+
+[[source]]
+name = "msrc-blog"
+kind = "feed"
+url = "https://msrc.microsoft.com/blog/feed"
+trust_tier = "primary"
+xml_allow_doctype = true  # declares a <!DOCTYPE>; entities/external refs still forbidden
+# Disabled 2026-11-18: feed is not well-formed XML (invalid token, line 124). We do not use
+# lenient/recovering XML parsers. Coverage remains via microsoft-security-blog and CVE.org
+# (Microsoft is a CNA). Re-check monthly: `pytest -m network` after re-enabling.
+enabled = false
+
+[[source]]
+name = "microsoft-security-blog"
+kind = "feed"
+url = "https://www.microsoft.com/en-us/security/blog/feed/"
+trust_tier = "primary"
+
+[[source]]
+name = "unit42"
+kind = "feed"
+url = "https://unit42.paloaltonetworks.com/feed/"
+trust_tier = "primary"
+
+[[source]]
+name = "cisco-talos"
+kind = "feed"
+url = "https://blog.talosintelligence.com/rss/"
+trust_tier = "primary"
+
+[[source]]
+name = "watchtowr-labs"
+kind = "feed"
+url = "https://labs.watchtowr.com/rss/"
+trust_tier = "primary"
+
+[[source]]
+name = "portswigger-research"
+kind = "feed"
+url = "https://portswigger.net/research/rss"
+trust_tier = "primary"
+
+[[source]]
+name = "sans-isc"
+kind = "feed"
+url = "https://isc.sans.edu/rssfeed_full.xml"
+trust_tier = "primary"
+
+[[source]]
+name = "elastic-security-labs"
+kind = "feed"
+url = "https://www.elastic.co/security-labs/rss/feed.xml"
+trust_tier = "primary"
+max_bytes = 16777216  # ~8.5 MB full-content feed (found by network CI)
+
+[[source]]
+name = "trail-of-bits"
+kind = "feed"
+url = "https://blog.trailofbits.com/feed/"
+trust_tier = "primary"
+
+[[source]]
+name = "rapid7-blog"
+kind = "feed"
+url = "https://www.rapid7.com/blog/rss/"
+trust_tier = "primary"
+
+# ------------------------------------------------------------------ RSS: secondary
+[[source]]
+name = "bleepingcomputer"
+kind = "feed"
+url = "https://www.bleepingcomputer.com/feed/"
+trust_tier = "secondary"
+
+[[source]]
+name = "the-hacker-news"
+kind = "feed"
+url = "https://feeds.feedburner.com/TheHackersNews"
+trust_tier = "secondary"
+
+[[source]]
+name = "securityweek"
+kind = "feed"
+url = "https://www.securityweek.com/feed/"
+trust_tier = "secondary"
+
+[[source]]
+name = "krebsonsecurity"
+kind = "feed"
+url = "https://krebsonsecurity.com/feed/"
+trust_tier = "secondary"
