@@ -4,6 +4,14 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Detections verified on the lab host: 14/14
+
+`detections/simulate.sh` fired every host-verifiable detection on the VM. The alert *counts* matched the design, which checks the logic as well as the plumbing: 6 wrong logins gave 4 failures, 1 brute force and 1 throttle (the throttle runs before the password check, so the 6th attempt is not a failure), and 8 container-exec alerts came from exactly the simulation's 8 `docker exec` calls while the health checks stayed silent. One surprise: a single blocked outbound connection produced 5 alerts, because the kernel logs every SYN retry of the same attempt (conntrack still sees them as `NEW`). It is noted as a de-duplication candidate rather than hidden.
+
+Publishing the evidence needed care. The Wazuh screenshots contained the lab host name in about twenty places, including the filter pill, and the browser chrome. Redaction was automated with OCR (locate words, mask boxes), then checked by eye. That check found one occurrence the OCR missed, a host name split across a line wrap (OCR read it as two unrelated words), which was masked by hand. A final OCR pass over the published images confirms no fragment remains.
+
+---
+
 ## 2026-11-18 — Detections, steps 3–6: rules tested on a real Wazuh manager
 
 - **Collection verified on the VM before writing rules.** `wazuh-logtest` decoded the platform events into fields, a FIM alert fired in real time, and the Docker listener was running. The Docker check produced the most useful finding: **built-in rule 87907 had fired 106 times in the first hour, all for the database's health check**, because Docker runs health checks through the same `exec` an attacker would use. Rule 100150 silences exactly the three health-check commands in `compose.yaml`; a test keeps the list equal to the compose file, and four look-alike commands (for example the health check with `; cat /run/secrets/...` appended) must still alert.
