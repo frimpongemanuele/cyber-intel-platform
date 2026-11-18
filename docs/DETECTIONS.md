@@ -1,7 +1,8 @@
 # DETECTIONS.md — detecting attacks on the platform itself
 
-> Status: **all 6 steps built.** Security events, Wazuh collection, 25 rules (22 alerting), a safe attack
-> simulation, and behavioural rule tests on a real Wazuh manager in CI (28/28 cases).
+> Status: **all 6 steps built and verified.** Security events, Wazuh collection, 25 rules (22
+> alerting), behavioural rule tests on a real Wazuh manager in CI (28/28 cases), and a safe
+> attack simulation on the lab host (14/14 detections fired, §4).
 > Target SIEM: Wazuh 4.14 (manager on the same host).
 
 The threat model (THREAT_MODEL.md) says what an attacker would try; the platform's controls stop it. This document adds the third layer: **noticing the attempt**. Each detection is tied to a threat, a log source, an ATT&CK technique and, once built, a test.
@@ -130,6 +131,47 @@ sudo detections/simulate.sh            # ~1 minute; prints PASS/MISS for 14 dete
 
 It only touches this host (details in the script header). Rules for SSRF refusals, quarantined records and the AI layer need a hostile upstream or a model; they are covered by the CI replay instead. The wrong-login burst exhausts the login budget for the simulation's client address for 15 minutes; your browser through VirtualBox comes from a different address. Access through `tailscale serve` shares the simulation's address, so it is affected.
 
+### Result on the lab host (2026-11-18): 14/14
+
+`detections/simulate.sh` on the Ubuntu 24.04 VM running Wazuh 4.14.9 next to the platform:
+
+```
+PASS  100101  dashboard login failed                 4 alert(s)
+PASS  100102  brute force                            1 alert(s)
+PASS  100103  login throttled                        1 alert(s)
+PASS  100106  forged session cookie                  1 alert(s)
+PASS  100107  cross-site POST                        1 alert(s)
+PASS  100108  unexpected Host header                 24 alert(s)
+PASS  100109  Host header burst                      1 alert(s)
+PASS  100131  egress proxy refused a destination     1 alert(s)
+PASS  100132  DB password failure                    5 alert(s)
+PASS  100133  repeated DB password failures          1 alert(s)
+PASS  100140  web container outbound attempt         5 alert(s)
+PASS  100151  command inside platform container      8 alert(s)
+PASS  100160  secret file changed                    1 alert(s)
+PASS  100161  configuration changed                  1 alert(s)
+
+14/14 detections fired
+```
+
+The counts are what the design predicts, which is as much a check as the PASS column:
+
+- **6 wrong logins → 4 × 100101, 1 × 100102, 1 × 100103.** The 5th failure is escalated to brute force (frequency rules replace the base alert). The 6th never reached the password check, because the throttle runs first, so it is a *throttled* event, not a failure.
+- **25 bogus Host headers → 24 × 100108 + 1 × 100109**, and **6 DB password failures → 5 × 100132 + 1 × 100133**: the same escalation pattern.
+- **8 × 100151** = exactly the simulation's own `docker exec` calls (`true`, the outbound test, 6 × `psql`). The three health checks, which run every 10–30 s, produced none.
+- **5 × 100140 for one blocked connection:** the kernel logs each TCP SYN retry of the same attempt (still `NEW` to conntrack). Harmless and rate-limited; a candidate for de-duplication.
+- The secret-file alert reports the change of `mtime` only. Wazuh stored no diff for it, as configured.
+
+High-severity alerts (levels 12–14: the secret change and the blocked egress attempts, with ATT&CK techniques and tactics):
+
+![Wazuh: high-severity cyber-intel alerts](images/wazuh-alerts-high.png)
+
+Medium-severity alerts (levels 7–11: config change, commands inside containers, DB brute force):
+
+![Wazuh: medium-severity cyber-intel alerts](images/wazuh-alerts-medium.png)
+
+*Screenshots: Wazuh Discover on the lab host, browser chrome removed, host name redacted.*
+
 ## 5. Roadmap
 
 | Step | Deliverable | Status |
@@ -137,6 +179,6 @@ It only touches this host (details in the script header). Rules for SSRF refusal
 | 1 | Security events in the platform; logging firewall rule | ✅ |
 | 2 | Wazuh collection on the manager: container logs, kernel log, FIM, Docker listener | ✅ (verify on host) |
 | 3 | Rules in `detections/wazuh/rules/`, each mapped to ATT&CK | ✅ |
-| 4 | Safe attack simulation against the lab (`detections/simulate.sh`) | ✅ (run on the host) |
+| 4 | Safe attack simulation against the lab (`detections/simulate.sh`) | ✅ 14/14 on the lab host |
 | 5 | Rule tests in CI on the official manager image (28 cases) | ✅ |
 | 6 | Logic, false positives and first response per detection (§3) | ✅ |

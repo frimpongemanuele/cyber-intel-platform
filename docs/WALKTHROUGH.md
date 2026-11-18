@@ -32,6 +32,10 @@ The archive became the platform's test set: story-linking was designed and measu
 
 ![Story with AI analysis](images/story-ai.png)
 
+**Detections on the platform itself.** The platform emits structured security events; Wazuh rules turn them, and container, kernel, Docker and file-integrity signals, into ATT&CK-mapped alerts. A safe simulation fired all 14 host-verifiable detections on the lab VM:
+
+![Wazuh alerts from the attack simulation](images/wazuh-alerts-high.png)
+
 **Source health.** Every fetch is audited; failing sources back off and are visible.
 
 ![Sources](images/sources.png)
@@ -51,6 +55,7 @@ The archive became the platform's test set: story-linking was designed and measu
 
 - **~600 tests**, including ~80 against real PostgreSQL 16, run on every pull request on Python 3.12 and 3.13; `mypy --strict`, ruff, pip-audit and gitleaks gate merges.
 - **Mutation testing** throughout: each security check was disabled in turn to prove a test fails. The results, including the survivors that led to fixes, are in ENGINEERING_LOG.
+- **Detections tested twice:** 28 log sequences replayed through a real Wazuh manager in CI, and a safe attack simulation on the lab host (14/14).
 - **Hostile fixtures:** XXE and billion-laughs feeds, SSRF via DNS to metadata/loopback/CGNAT, XSS through every page, a 29-document prompt-injection corpus with a malicious-model simulator.
 - **The real stack in CI:** `deploy.yml` builds the images, brings up Compose, and probes from inside the containers: non-root, no capabilities, read-only root, egress allowlist (6 probes), database role denials, real KEV ingestion through the proxy, login, backup and restore.
 - **Negative results are recorded**, e.g. a rejected title-similarity metric and three design changes forced by the first real-stack run (ENGINEERING_LOG, Phase 10).
