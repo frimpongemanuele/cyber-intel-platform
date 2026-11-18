@@ -25,6 +25,9 @@ httpx is not installed in the build environment, so the providers use `urllib` w
 ### Tooling note
 The file-writing tool turned `\u200b`-style escapes in test sources into the raw invisible characters. Ruff's confusable-character rule (RUF001) flagged them, and test files now build such characters with `chr()` so the sources stay ASCII.
 
+### A flaky Phase 8 test, found by CI
+`test_session_rejects_tampering_and_other_keys` "tampered" a session MAC by replacing its last character with `A`. Whenever the random MAC already ended in `A` the token was unchanged, so the assertion failed about once in 64 runs. The signer was correct (it compares the canonical MAC string in constant time); the test now always substitutes a different character.
+
 ### Not done here
 No real model was run in this environment (no network, no model). The gate does not depend on one; AI.md §5 describes how to measure a real backend's rejection rate on the corpus.
 
