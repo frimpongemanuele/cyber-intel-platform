@@ -1,0 +1,15 @@
+# Pull the research archive and import its stories, as the given user (needs docker group).
+#   sudo cp deploy/systemd/cit-archive-sync@.* /etc/systemd/system/
+#   sudo systemctl enable --now cit-archive-sync@<user>.timer
+[Unit]
+Description=Cyber-intel: sync research archive (%i)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+Environment=HOME=/home/%i
+ExecStart=/srv/cit/deploy/scripts/archive-sync.sh
+NoNewPrivileges=yes
+PrivateTmp=yes

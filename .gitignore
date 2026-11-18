@@ -21,3 +21,4 @@ secrets/
 # deployment
 deploy/secrets/
 backups/
+compose.override.yaml

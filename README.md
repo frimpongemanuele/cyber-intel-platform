@@ -2,7 +2,27 @@
 
 A self-hosted cyber threat-intelligence platform for one analyst's homelab. It collects vulnerability and threat data from authoritative sources, enriches and de-duplicates it, and produces a daily briefing. An AI layer explains and connects the data but is **never the source of truth**.
 
-> **Status: Phases 6–8 complete.** Hardened ingestion with weekly live verification of every source; a PostgreSQL store with integrity rules enforced in SQL; cross-day story identity; and a zero-JavaScript dashboard with a transparent priority score. The AI analysis layer (Phase 9) is next. See the [roadmap](#roadmap).
+> **Status: v1.0, all 11 phases complete and running in a homelab.** Hardened ingestion from CISA KEV, CVE.org, NVD, FIRST EPSS and curated research feeds; PostgreSQL with integrity rules in SQL; cross-day story identity; a zero-JavaScript dashboard with a transparent priority score; an optional, containment-gated AI layer; and a hardened Docker Compose deployment proven on the live stack in CI. **Start with the [10-minute walkthrough](docs/WALKTHROUGH.md).**
+
+![Overview (synthetic demo data)](docs/images/overview.png)
+
+```mermaid
+flowchart LR
+  subgraph internet[Internet: untrusted]
+    KEV[CISA KEV]
+    CVE[CVE.org]
+    NVD[NVD]
+    EPSS[FIRST EPSS]
+    RSS[Research feeds]
+  end
+  KEV & CVE & NVD & EPSS & RSS -->|CONNECT :443, allowlist| PROXY[egress proxy]
+  PROXY --> ING[ingest<br/>parsers + SSRF guard]
+  ARCH[(research archive<br/>daily briefs)] -->|import| ING
+  ING -->|cit_ingest| DB[(PostgreSQL<br/>facts + integrity rules)]
+  AI[AI runner, optional<br/>none / Ollama / own key] -->|cit_ai: append-only| DB
+  DB -->|cit_web: read-only| WEB[dashboard<br/>zero JS, strict CSP]
+  WEB -->|tailscale serve, HTTPS| YOU((analyst))
+```
 
 ## Why it exists
 
@@ -81,10 +101,11 @@ CIT_WEB_AI=1 python -m cyberintel.web.server
 | 8 | Dashboard: Starlette, zero-JS, strict CSP, auth, priority view | ✅ |
 | 9 | Optional AI layer: local or own-key backends, strict output gate, provenance, injection corpus + compromised-model containment tests | ✅ |
 | 10 | Hardened Docker Compose for Proxmox: VPN-only, least-privilege roles, egress proxy, backups; CI deploys and probes the real stack | ✅ |
-| 11 | **next:** Docs polish: screenshots, walkthrough, final review | |
+| 11 | Docs: walkthrough, screenshots from synthetic demo data, VirtualBox guide, daily archive sync, final review | ✅ |
 
 ## Docs
 
+- [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md): **start here**, a 10-minute tour with screenshots and the decisions worth asking about
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): decision record, pipeline, data model, deployment
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): trust boundaries, STRIDE, mitigations, verification
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): Proxmox VM, Tailscale, install, backups/restore, operations
