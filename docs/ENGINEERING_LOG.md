@@ -4,6 +4,34 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Phase 6b: network layer and collectors
+
+### Source verification changed the design
+Checking every endpoint before writing collectors turned up the April 2026 NVD change: risk-based triage, ~29k backlogged CVEs moved to *Not Scheduled* (API: `Deferred`), and no NIST score when the CNA already supplied one. NVD can no longer be "the CVSS source". Consequences:
+- **CVE.org (CVE Services) became a primary source.** It carries the CNA's own CVSS plus CISA-ADP Vulnrichment (SSVC *Exploitation: active*, a free exploitation signal that complements KEV).
+- **Every CVSS score carries provenance** (`nvd`/`cna`/`adp`/`other`). Scores that disagree are all kept.
+- **One explicit headline policy** (`collectors/cvss.py`): v3.x before v4.0 for corpus-wide comparability, then NVD > CNA > ADP > other, v2 last. The policy is tested case by case.
+- NVD relays CISA-ADP scores under a UUID source. Rather than hard-code that UUID, those are labelled `other`: under-claiming provenance is safer than over-claiming it.
+- EPSS moved hosts in 2025 (`epss.cyentia.com` → `epss.empiricalsecurity.com`, old host 301s). A collector built from memory would have broken here. Feed URLs are therefore verified by a weekly live CI job (`network.yml`), not trusted.
+
+### Fetcher design
+- **IP pinning with SNI.** The client connects to the guard-validated address (`Host` header + TLS SNI = hostname, so certificate checks still run against the name). DNS is resolved exactly once, which closes the rebinding window between check and connect.
+- **Proxy-mode trade-off.** Behind the homelab's allowlisting egress proxy, the proxy resolves DNS (`CONNECT host:443`), so pinning moves to the proxy's destination ACL. Accepted and documented rather than hidden.
+- **Redirects are never followed implicitly.** Each hop is re-validated (allowlist, downgrade, internal targets, hop limit) and re-pinned.
+- **Bounded gunzip** for EPSS. Mutation check: an unbounded decompressor peaks at 458 MB on the 200 MiB bomb fixture; the bounded one stays under 32 MB, and the test asserts it.
+- **Residual risk:** httpx inflates `Content-Encoding: gzip` per chunk without an output limit. The byte cap stops the read, but one chunk can briefly expand about 1000×. Bounded and accepted.
+
+### Untrusted IDs never become URL paths unchecked
+`collect_cve5` builds `…/api/cve/{id}` from IDs extracted from untrusted text, so IDs are matched against the strict CVE pattern first. Traversal and injection attempts (`../../admin`, `%2F..`, `?x=`, `#`) are refused before any request, and the returned record must match the requested ID.
+
+### Paging is checked, not trusted
+The NVD iterator verifies `startIndex` on every page (a repeated page is an error, not an infinite loop), caps pages, enforces the 120-day window, and keeps the API key in a header, never in the URL where logs and proxies would capture it.
+
+### What could not be verified locally
+The workspace has no package access, so `net/fetch.py` (httpx) is type-checked and tested only in CI. The pure parts (rate limiter, gunzip, collectors via a fake `Fetcher`) are fully tested locally.
+
+---
+
 ## 2026-11-18 — Phase 6 slice 1: pure core
 
 ### Context: the archive after 9 days

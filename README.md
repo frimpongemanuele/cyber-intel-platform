@@ -2,7 +2,7 @@
 
 A self-hosted cyber threat-intelligence platform for one analyst's homelab. It collects vulnerability and threat data from authoritative sources, enriches and de-duplicates it, and produces a daily briefing. An AI layer explains and connects the data but is **never the source of truth**.
 
-> **Status: Phase 6, ingestion MVP in progress.** The security-critical, pure-logic core is built and tested. The network fetcher, database and UI come next. See the [roadmap](#roadmap).
+> **Status: Phase 6 (ingestion) complete.** Hardened fetcher, collectors for KEV, EPSS, NVD, CVE.org and RSS/Atom, with weekly live verification of every source. Database (Phase 7) is next. See the [roadmap](#roadmap).
 
 ## Why it exists
 
@@ -15,7 +15,7 @@ It started as a scheduled AI research agent that writes a daily intel brief into
 3. **Fail closed.** When a check is unsure (an ambiguous URL, an odd XML construct, a malformed row), the answer is no.
 4. **Every protection has a test that would fail without it.** Verified by mutation testing, not assumed.
 
-## What's built (Phase 6, slice 1)
+## What's built (Phase 6)
 
 | Module | Purpose | Threat model |
 |---|---|---|
@@ -25,9 +25,13 @@ It started as a scheduled AI research agent that writes a daily intel brief into
 | `collectors/kev.py` | CISA KEV parser. Validates row by row: one bad record is quarantined, not fatal; flags count mismatches | T4, T10 |
 | `collectors/epss.py` | FIRST EPSS CSV parser (streaming, range-validated) | T10 |
 | `normalize.py` | CVE extraction (handles Unicode dashes), canonical URLs for exact de-duplication | — |
+| `net/fetch.py` | The only outbound HTTP client: connects to guard-validated **pinned IPs** (Host + SNI = hostname), re-validates every redirect, caps bytes, conditional GET | T1, T3 |
+| `net/ratelimit.py`, `net/decompress.py` | Per-host pacing (provably within NVD's 5/30 s); bounded gunzip (decompression-bomb defence) | T3 |
+| `collectors/nvd.py`, `cve5.py`, `cvss.py` | NVD 2.0 + CVE.org 5.x parsers; **CVSS with provenance** (NVD/CNA/ADP) and an explicit headline policy; CISA-ADP SSVC | T10 |
+| `collectors/run.py`, `sources.py` | Collector jobs over a `Fetcher` protocol; validated source registry that **generates the SSRF allowlist** | T1 |
 | `eval/archive.py` | Loads the agent's archive as gold data; links the same story across days; computes recall@k for the pipeline | — |
 
-**Test suite:** 121 tests + 1 documented known limitation (`xfail(strict=True)`). `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
+**Test suite:** ~210 offline tests + 1 documented known limitation (`xfail(strict=True)`), plus a weekly live-source job. `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
 
 ## Run it
 
@@ -45,9 +49,9 @@ python -m cyberintel.eval.archive /path/to/cyber-intel-archive
 |---|---|---|
 | 1–4 | Scheduled research agent, sources, scoring, report formats | ✅ running daily |
 | 5 | Architecture + threat model | ✅ draft accepted |
-| 6 | Ingestion: pure core | ✅ this slice |
-| 6b | Network layer: pinned-IP `httpx` transport, conditional GET, rate limits, fetcher tests | next |
-| 7 | PostgreSQL + Alembic; enrichment joins; persistent cross-day developments; entity + embedding linking | |
+| 6 | Ingestion: pure core | ✅ |
+| 6b | Network layer + collectors + live source verification | ✅ |
+| 7 | **next:** PostgreSQL + Alembic; enrichment joins; persistent cross-day developments; entity + embedding linking | |
 | 8 | FastAPI + HTMX dashboard | |
 | 9 | AI layer: structured outputs, provenance, prompt-injection test corpus | |
 | 10 | Hardened Docker Compose on Proxmox, VPN-only access | |
@@ -57,6 +61,7 @@ python -m cyberintel.eval.archive /path/to/cyber-intel-archive
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): decision record, pipeline, data model, deployment
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): trust boundaries, STRIDE, mitigations, verification
+- [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md): endpoints, limits, and what the 2026 NVD change means for the design
 - [`docs/ENGINEERING_LOG.md`](docs/ENGINEERING_LOG.md): decisions and findings, including the ones that didn't work
 
 ## License

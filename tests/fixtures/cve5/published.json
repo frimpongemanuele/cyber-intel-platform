@@ -1,0 +1,31 @@
+{
+  "dataType": "CVE_RECORD", "dataVersion": "5.1",
+  "cveMetadata": {"cveId": "CVE-2026-102895", "assignerOrgId": "a0819718-46f1-4df5-94e2-005712e83aaa",
+                  "assignerShortName": "GitHub_M", "state": "PUBLISHED",
+                  "datePublished": "2026-11-04T22:17:00.000Z", "dateUpdated": "2026-11-10T13:05:21.442Z"},
+  "containers": {
+    "cna": {
+      "providerMetadata": {"orgId": "a0819718-46f1-4df5-94e2-005712e83aaa", "shortName": "GitHub_M"},
+      "title": "GPUStack treats loopback requests as authenticated",
+      "descriptions": [{"lang": "en-US", "value": "regional english"}, {"lang": "en", "value": "Prior to 2.2.0, get_current_user trusted requests that appeared to originate from loopback."}],
+      "problemTypes": [{"descriptions": [{"cweId": "CWE-287", "lang": "en", "description": "CWE-287: Improper Authentication", "type": "CWE"},
+                                         {"lang": "en", "description": "CWE-290: Authentication Bypass by Spoofing", "type": "CWE"}]}],
+      "metrics": [{"cvssV3_1": {"version": "3.1", "baseScore": 9.8, "baseSeverity": "CRITICAL", "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}},
+                  {"cvssV4_0": {"version": "4.0", "baseScore": 9.3, "baseSeverity": "CRITICAL", "vectorString": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N"}},
+                  {"format": "CVSS", "scenarios": [{"lang": "en", "value": "GENERAL"}]}],
+      "affected": [{"vendor": "gpustack", "product": "gpustack", "versions": [{"version": "< 2.2.0", "status": "affected"}]},
+                   {"vendor": "gpustack", "product": "gpustack"}, {"vendor": "", "product": "x"}],
+      "references": [{"url": "https://github.com/gpustack/gpustack/security/advisories/GHSA-gj9m-f8ph-pmhr", "tags": ["x_refsource_CONFIRM"]},
+                     {"url": "ftp://example.org/x"}]
+    },
+    "adp": [{
+      "providerMetadata": {"orgId": "134c704f-9b21-4f2e-91b3-4a467353bcc0", "shortName": "CISA-ADP"},
+      "title": "CISA ADP Vulnrichment",
+      "metrics": [
+        {"other": {"type": "ssvc", "content": {"timestamp": "2026-11-09T16:00:00.000Z", "id": "CVE-2026-102895", "role": "CISA Coordinator",
+          "version": "2.0.3", "options": [{"Exploitation": "active"}, {"Automatable": "yes"}, {"Technical Impact": "total"}]}}},
+        {"other": {"type": "kev", "content": {"dateAdded": "2026-11-09", "reference": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"}}}
+      ]
+    }]
+  }
+}

@@ -28,7 +28,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m \"not network\""
 markers = ["network: test needs live internet (skipped by default; run in CI with -m network)"]
 
 [tool.ruff]

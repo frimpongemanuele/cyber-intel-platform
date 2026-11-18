@@ -1,0 +1,5 @@
+{"dataType": "CVE_RECORD", "dataVersion": "5.1",
+ "cveMetadata": {"cveId": "CVE-2026-130003", "state": "REJECTED", "assignerShortName": "mitre",
+                 "datePublished": "2026-11-01T00:00:00Z", "dateRejected": "2026-11-02T00:00:00Z", "dateUpdated": "2026-11-02T00:00:00Z"},
+ "containers": {"cna": {"providerMetadata": {"shortName": "mitre"},
+   "rejectedReasons": [{"lang": "en", "value": "DO NOT USE THIS CVE ID NUMBER. Duplicate of CVE-2026-123158."}]}}}

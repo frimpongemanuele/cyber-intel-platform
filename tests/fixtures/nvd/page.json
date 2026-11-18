@@ -1,0 +1,51 @@
+{
+  "resultsPerPage": 4, "startIndex": 0, "totalResults": 9, "format": "NVD_CVE", "version": "2.0",
+  "timestamp": "2026-11-18T09:12:44.123",
+  "vulnerabilities": [
+    {"cve": {
+      "id": "CVE-2026-123158", "sourceIdentifier": "cve@mitre.org",
+      "published": "2026-11-05T15:46:00.000", "lastModified": "2026-11-09T18:01:13.500",
+      "vulnStatus": "Analyzed",
+      "cisaExploitAdd": "2026-11-09", "cisaActionDue": "2026-11-30",
+      "descriptions": [{"lang": "es", "value": "Omitir"}, {"lang": "en", "value": "OpenSSH before 10.6p2 on musl without PAM allows authentication bypass via an oversized password."}],
+      "metrics": {
+        "cvssMetricV40": [{"source": "cve@mitre.org", "type": "Secondary",
+          "cvssData": {"version": "4.0", "vectorString": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N", "baseScore": 9.2, "baseSeverity": "CRITICAL"}}],
+        "cvssMetricV31": [
+          {"source": "nvd@nist.gov", "type": "Primary",
+           "cvssData": {"version": "3.1", "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H", "baseScore": 8.1, "baseSeverity": "HIGH"},
+           "exploitabilityScore": 2.2, "impactScore": 5.9},
+          {"source": "cve@mitre.org", "type": "Secondary",
+           "cvssData": {"version": "3.1", "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", "baseScore": 9.8, "baseSeverity": "CRITICAL"}},
+          {"source": "nvd@nist.gov", "type": "Primary", "cvssData": {"version": "3.1", "baseScore": "not-a-number"}}
+        ]
+      },
+      "weaknesses": [{"source": "nvd@nist.gov", "type": "Primary", "description": [{"lang": "en", "value": "CWE-394"}, {"lang": "en", "value": "junk"}]},
+                     {"source": "cve@mitre.org", "type": "Secondary", "description": [{"lang": "en", "value": "CWE-394"}]}],
+      "configurations": [{"nodes": [{"operator": "OR", "cpeMatch": [{"vulnerable": true, "criteria": "cpe:2.3:a:openbsd:openssh:*:*:*:*:*:*:*:*"}]}]}],
+      "references": [{"url": "https://www.openssh.com/releasenotes.html", "source": "cve@mitre.org"},
+                     {"url": "javascript:alert(1)"}, {"url": "https://www.openssh.com/releasenotes.html"}]
+    }},
+    {"cve": {
+      "id": "CVE-2026-130001", "sourceIdentifier": "psirt@example-vendor.com",
+      "published": "2026-11-12T10:00:00.000", "lastModified": "2026-11-12T10:00:00.000",
+      "vulnStatus": "Deferred",
+      "descriptions": [{"lang": "en", "value": "Vendor-scored only: NVD did not analyse this record."}],
+      "metrics": {"cvssMetricV31": [{"source": "psirt@example-vendor.com", "type": "Secondary",
+          "cvssData": {"version": "3.1", "vectorString": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N", "baseScore": 6.5, "baseSeverity": "MEDIUM"}},
+                                    {"source": "134c704f-9b21-4f2e-91b3-4a467353bcc0", "type": "Secondary",
+          "cvssData": {"version": "3.1", "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", "baseScore": 7.5, "baseSeverity": "HIGH"}}]},
+      "weaknesses": [], "references": []
+    }},
+    {"cve": {
+      "id": "CVE-2009-0001", "sourceIdentifier": "cve@mitre.org",
+      "published": "2009-01-01T00:00:00.000", "lastModified": "2020-01-01T00:00:00.000",
+      "vulnStatus": "Modified",
+      "descriptions": [{"lang": "en", "value": "Old v2-only record."}],
+      "metrics": {"cvssMetricV2": [{"source": "nvd@nist.gov", "type": "Primary",
+          "cvssData": {"version": "2.0", "vectorString": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "baseScore": 7.5}, "baseSeverity": "HIGH"}]}
+    }},
+    {"cve": {"id": "CVE-2026-130002", "sourceIdentifier": "x", "vulnStatus": "Received",
+             "descriptions": [{"lang": "en", "value": "missing published"}], "lastModified": "2026-11-12T10:00:00.000"}}
+  ]
+}
