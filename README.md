@@ -35,9 +35,10 @@ It started as a scheduled AI research agent that writes a daily intel brief into
 | `ingest.py` | Runner: due/backoff scheduling, incremental NVD windows, CVE.org enrichment queue, `fetch_runs` audit trail | T1, T4 |
 | `web/app.py`, `web/auth.py` | Dashboard: Starlette, **zero JavaScript**, CSP `default-src 'none'`, host allowlist (anti DNS-rebinding), scrypt + signed `__Host-` sessions, throttled login, same-origin POSTs only, read-only DB sessions | T9, T13, T14 |
 | `store/migrations/0002_overview.up.sql` | Transparent 0–100 priority (exploitation evidence, EPSS, CVSS, ransomware, recency), every component visible | — |
+| `ai/` (optional, off by default) | AI analyst notes from a **local (Ollama) or your own hosted API key**, never required. Strict output validator (foreign URLs, unknown CVEs, links, commands, hidden text, prompt leaks), random boundary + canary, re-validation at render. Release gate: **containment under a malicious-model simulator** across a 29-document injection corpus, with fact tables proven unchanged | T6, T10, T11 |
 | `eval/archive.py` | Loads the agent's archive as gold data; links stories across days by CVE, title and **rarity-weighted vendor/product entities**, with a CVE-disagreement veto and roll-up isolation; recall@k | — |
 
-**Test suite:** ~330 offline tests (incl. the full web layer), ~60 PostgreSQL tests (SQL via psql + repository via psycopg, in CI against a PostgreSQL 16 service), and a weekly live-source job. Integrity rules are verified by mutation testing. `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
+**Test suite:** ~520 offline tests (incl. the full web layer and the AI containment gate), ~60 PostgreSQL tests (SQL via psql + repository via psycopg, in CI against a PostgreSQL 16 service), and a weekly live-source job. Integrity rules are verified by mutation testing. `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
 
 ## Run it
 
@@ -57,6 +58,10 @@ python -m cyberintel.eval.archive /path/to/cyber-intel-archive   # story-linking
 python -m cyberintel.web.auth hash-password   # -> CIT_WEB_PASSWORD_HASH
 python -m cyberintel.web.auth new-secret      # -> CIT_WEB_SECRET
 python -m cyberintel.web.server
+
+# Optional AI layer (docs/AI.md): off unless configured; no paid service required
+CIT_AI_PROVIDER=ollama CIT_AI_MODEL=llama3.1:8b python -m cyberintel.ai run --limit 20
+CIT_WEB_AI=1 python -m cyberintel.web.server
 ```
 
 ## Roadmap
@@ -69,14 +74,15 @@ python -m cyberintel.web.server
 | 6b | Network layer + collectors + live source verification | ✅ |
 | 7 | PostgreSQL (SQL-first), integrity rules in SQL, story identity with entity linking, ingest runner | ✅ |
 | 8 | Dashboard: Starlette, zero-JS, strict CSP, auth, priority view | ✅ |
-| 9 | **next:** AI layer: structured outputs, provenance, prompt-injection test corpus | |
-| 10 | Hardened Docker Compose on Proxmox, VPN-only access | |
+| 9 | Optional AI layer: local or own-key backends, strict output gate, provenance, injection corpus + compromised-model containment tests | ✅ |
+| 10 | **next:** Hardened Docker Compose on Proxmox, VPN-only access | |
 | 11 | Docs: DATA_SOURCES, SCORING, DEPLOYMENT, screenshots | |
 
 ## Docs
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): decision record, pipeline, data model, deployment
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): trust boundaries, STRIDE, mitigations, verification
+- [`docs/AI.md`](docs/AI.md): the optional AI layer, its backends, and the containment gate
 - [`docs/SCORING.md`](docs/SCORING.md): the priority model, development scores, CVSS headline policy
 - [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md): endpoints, limits, and what the 2026 NVD change means for the design
 - [`docs/ENGINEERING_LOG.md`](docs/ENGINEERING_LOG.md): decisions and findings, including the ones that didn't work

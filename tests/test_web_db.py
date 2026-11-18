@@ -112,3 +112,46 @@ def test_reader_session_cannot_write(dbname: str) -> None:
     connect = psycopg_connector(f"dbname={dbname}")
     with connect() as conn, pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
         conn.execute("INSERT INTO source_state (source_name) VALUES ('evil-write')")
+
+
+def test_ai_panel_end_to_end_with_real_jsonb(dbname: str) -> None:
+    """A validated row written by the production runner SQL renders through psycopg's
+    jsonb decoding; a rejected row for the same story is never selected."""
+    from aihelpers import good_output
+
+    from cyberintel.ai.runner import AnalysisRecord, record_params
+    from cyberintel.store import ai_sql
+
+    slug = "2026-11-01-acme-vpn-authbypass"
+    out = good_output(cited_urls=[], summary="Validated summary text.", key_points=[])
+    with psycopg.connect(dbname=dbname, autocommit=True) as conn:
+        dev_id = conn.execute("SELECT id FROM developments WHERE slug = %s", (slug,)).fetchone()[0]
+        for i, (ok, output) in enumerate([(True, out), (False, None)]):
+            rec = AnalysisRecord(
+                provider="ollama",
+                model="m",
+                input_hash=f"{i:064x}",
+                document_ids=(),
+                cve_ids=(),
+                validated=ok,
+                output=output,
+                rejected_reasons=() if ok else ("schema: injected",),
+                raw_output="REJECTED-RAW-MARKER" if not ok else "{}",
+                injection_suspected=False,
+                input_tokens=1,
+                output_tokens=1,
+            )
+            conn.execute(ai_sql.INSERT_AI_ANALYSIS.encode(), record_params(dev_id, rec))
+    auth = AuthConfig(
+        PasswordHash.parse(hash_password("pw-for-tests", n=MIN_SCRYPT_N)),
+        SessionSigner(bytes(range(32))),
+    )
+    app = create_app(DbReader(psycopg_connector(f"dbname={dbname}")), auth, ai_enabled=True)
+    html = request(
+        app,
+        "GET",
+        f"/stories/{slug}",
+        headers={"cookie": f"__Host-cit_session={auth.signer.issue()}"},
+    ).text
+    assert "AI-generated · may be wrong" in html and "Validated summary text." in html
+    assert "REJECTED-RAW-MARKER" not in html

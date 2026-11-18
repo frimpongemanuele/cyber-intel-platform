@@ -68,6 +68,12 @@ def vuln_row(cve: str = "CVE-2026-123158", **kw: Any) -> dict[str, Any]:
 class FakeReader:
     def __init__(self) -> None:
         self.queries: list[Any] = []
+        self.ai_row: dict[str, Any] | None = None
+        self.ai_calls = 0
+
+    def story_ai(self, development_id: int) -> dict[str, Any] | None:
+        self.ai_calls += 1
+        return self.ai_row
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -529,3 +535,82 @@ def test_filters_reach_the_reader_validated(
 def test_pager_links_preserve_filters(app: Any, session: dict[str, str]) -> None:
     html = request(app, "GET", "/vulns?kev=1&sort=cvss", headers=session).text
     assert 'href="/vulns?sort=cvss&amp;kev=1&amp;page=2"' in html  # 120 results, 50 per page
+
+
+# --------------------------------------------------------------------------- AI panel (Phase 9)
+
+
+AXES = ("technical_impact", "real_world", "offensive", "defensive", "learning")
+AXES += ("portfolio", "urgency")
+
+
+def ai_row(**output_overrides: Any) -> dict[str, Any]:
+    output: dict[str, Any] = {
+        "summary": f"Summary {XSS}",
+        "why_it_matters": f"Because {ATTR}",
+        "key_points": [XSS],
+        "cited_urls": ["https://vendor.example/a", JS_URL],
+        "learning": [{"topic": ATTR, "reason": "lab"}],
+        "relevance": dict.fromkeys(AXES, 3),
+        "confidence": "MEDIUM",
+        "injection_suspected": True,
+    }
+    output.update(output_overrides)
+    return {
+        "output": output,
+        "provider": "ollama",
+        "model": "llama3.1:8b",
+        "prompt_version": "analysis-v1",
+        "created_at": datetime(2026, 11, 18, 7, 0, tzinfo=UTC),
+        "injection_suspected": True,
+    }
+
+
+@pytest.fixture
+def ai_app(reader: FakeReader, auth: AuthConfig) -> Any:
+    return create_app(reader, auth, sources=SOURCES, ai_enabled=True)
+
+
+def test_ai_panel_absent_and_never_queried_when_disabled(
+    app: Any, reader: FakeReader, session: dict[str, str]
+) -> None:
+    reader.ai_row = ai_row()
+    html = request(app, "GET", "/stories/2026-11-10-x", headers=session).text
+    assert "AI analysis" not in html and "AI-generated" not in html
+    assert reader.ai_calls == 0
+
+
+def test_ai_panel_labelled_escaped_and_links_neutralised(
+    ai_app: Any, reader: FakeReader, session: dict[str, str]
+) -> None:
+    reader.ai_row = ai_row()
+    html = request(ai_app, "GET", "/stories/2026-11-10-x", headers=session).text
+    assert "AI-generated · may be wrong" in html
+    assert "instruction-like text" in html  # injection_suspected surfaced
+    assert structural_problems(html) == []
+    assert "&lt;script&gt;" in html
+    assert 'href="https://vendor.example/a"' in html and 'href="#"' in html
+    assert "llama3.1:8b" in html and "analysis-v1" in html
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        None,
+        {"output": None},
+        ai_row(extra="x"),
+        ai_row(confidence="CERTAIN"),
+        ai_row(relevance={"urgency": 9}),
+        ai_row(summary="hidden" + chr(0x202E) + "text"),
+        ai_row(summary="zero" + chr(0x200B) + "width"),
+        {**ai_row(), "output": "not json"},
+    ],
+    ids=["none", "null-output", "extra", "enum", "range", "bidi", "zw", "garbage"],
+)
+def test_ai_panel_hidden_unless_stored_output_revalidates(
+    ai_app: Any, reader: FakeReader, session: dict[str, str], row: dict[str, Any] | None
+) -> None:
+    reader.ai_row = row
+    r = request(ai_app, "GET", "/stories/2026-11-10-x", headers=session)
+    assert r.status == 200
+    assert "No AI analysis for this story yet." in r.text and "AI-generated" not in r.text

@@ -12,6 +12,7 @@ secrets, so secrets never need to sit in the environment of the process tree):
     CIT_WEB_BIND / CIT_WEB_PORT    default 127.0.0.1:8080 (put Tailscale/WireGuard in front)
     CIT_WEB_INSECURE_COOKIES=1     plain-http local development only
     CIT_WEB_HSTS=1                 when served behind TLS
+    CIT_WEB_AI=1                   show validated AI analyses on story pages (docs/AI.md)
 
 Missing or unsafe auth configuration is a startup error: there is no unauthenticated mode.
 """
@@ -48,6 +49,9 @@ def main() -> int:
         allowed_hosts=[h for h in hosts if h],
         secure_cookies=os.environ.get("CIT_WEB_INSECURE_COOKIES") != "1",
         hsts=os.environ.get("CIT_WEB_HSTS") == "1",
+        # Optional AI panel (docs/AI.md). The web tier never holds a model key; it only
+        # reads validated rows from ai_analyses.
+        ai_enabled=os.environ.get("CIT_WEB_AI") == "1",
     )
     uvicorn.run(
         app,

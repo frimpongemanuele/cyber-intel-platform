@@ -102,6 +102,53 @@ def parse_query[Q: _Query](model: type[Q], params: Mapping[str, str]) -> Q:
         raise BadQueryError(f"invalid parameter {'.'.join(map(str, first['loc']))}") from None
 
 
+# --------------------------------------------------------------------------- AI panel
+
+RELEVANCE_LABELS = (
+    ("technical_impact", "Technical impact"),
+    ("real_world", "Real-world"),
+    ("offensive", "Offensive"),
+    ("defensive", "Defensive"),
+    ("learning", "Learning"),
+    ("portfolio", "Portfolio"),
+    ("urgency", "Urgency"),
+)
+
+
+def ai_panel(row: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Re-validate a stored analysis before it reaches a template (defence in depth).
+
+    The runner only stores validated output, but the dashboard does not trust that: the
+    jsonb is parsed again with the strict output schema and hidden characters are
+    re-checked. Anything that fails is simply not shown.
+    """
+    import json
+    import unicodedata
+
+    from cyberintel.ai.schema import AnalysisOutput
+
+    if not row or row.get("output") is None:
+        return None
+    raw = row["output"]
+    try:
+        text = raw if isinstance(raw, str) else json.dumps(raw)
+        out = AnalysisOutput.model_validate_json(text, strict=True)
+    except (ValidationError, TypeError, ValueError):
+        return None
+    for t in [*out.text_fields(), *out.cited_urls]:
+        if any(ch != "\n" and unicodedata.category(ch) in {"Cc", "Cf", "Co", "Cs"} for ch in t):
+            return None
+    return {
+        "out": out,
+        "relevance": [(label, getattr(out.relevance, key)) for key, label in RELEVANCE_LABELS],
+        "provider": row.get("provider"),
+        "model": row.get("model"),
+        "prompt_version": row.get("prompt_version"),
+        "created_at": row.get("created_at"),
+        "injection_suspected": bool(row.get("injection_suspected")),
+    }
+
+
 # --------------------------------------------------------------------------- filters
 
 

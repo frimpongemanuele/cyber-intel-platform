@@ -4,6 +4,32 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Phase 9: optional AI layer
+
+### Gate defined before code: containment under a compromised model
+Asking a model to ignore injected instructions is not testable. What is testable is what happens when it does not. The gate therefore uses a **malicious provider** that reads the real prompt (knowing the canary, boundary and allowed URLs) and returns exactly what each of 29 hostile documents wanted. 26 cases must be rejected with the expected reason; 3 are schema-valid by nature (in-range score manipulation, plausible misinformation, a suppressed injection flag) and are documented as *contained* rather than claimed as blocked (AI.md §3.2). A PostgreSQL test then runs the whole corpus through the real runner and production SQL and compares an md5 of every fact table and of the priority view before and after: identical. Planting one `UPDATE epss_scores` in the test repository makes it fail, so the check is live.
+
+### Mutation results
+Each validator check is load-bearing for the corpus: link syntax off → 5 cases get through; executable-instruction check off → 5; cited-URL check off → 3; unknown-CVE check off → 3; canary/boundary check off → 3; hidden-character check narrowed to `Cc` → 3. Unit-level: duplicate-key refusal, strict mode (blocks `"5"`, `true` and `4.0` as scores), fence handling, key-point length, NaN refusal each caught. Prompt builder: NFKC, format-character stripping, ASCII encoding, excerpt and title sanitising, random boundary each caught. Providers: proxy bypass, no-redirect, response cap, endpoint credential/query checks, key-out-of-`repr`, one-text-block rule, token-count sanitising each caught. Web: render-time re-validation, hidden-character recheck and the `ai_enabled` gate each caught.
+
+### Findings that changed the design
+- **"Allowed" and "shown" must be the same set.** The first prompt builder silently kept the first 8 documents while the validator allowed URLs from all of them, so a model could cite a document it never saw. The cap moved onto the input type (`AnalysisInput.evidence` max 8) and the SQL `LIMIT 8` is asserted equal to it.
+- **Titles are untrusted too.** Mutation testing showed development titles reached the FACTS block unsanitised; they come from feeds and CNAs, so they are now sanitised like evidence.
+- **A hostile model must not be able to crash storage.** PostgreSQL `text` cannot hold NUL; a model emitting `\x00` would have failed the insert and turned one document into a retry loop. Raw output is neutralised before storage, and rejected results are cached by input hash so a hostile document is not re-sent (and re-billed) every run.
+- **Parser differentials.** `{"summary": "a", "summary": "b"}` is accepted by most JSON parsers with differing "winner" semantics; the validator refuses duplicate keys outright.
+- **The boundary marker appears in the prompt preamble as well as around the block,** which broke a naive "split on boundary" test. Tests now split on the boundary as a full line.
+
+### Providers on the standard library
+httpx is not installed in the build environment, so the providers use `urllib` with an explicit opener: `ProxyHandler({})` (environment proxies ignored), a redirect handler that refuses all redirects (an API key must never follow a 3xx), TLS verification, timeouts and a 256 KiB read cap. This removed a dependency and made the transport testable here against a loopback HTTP server rather than only with mocks in CI.
+
+### Tooling note
+The file-writing tool turned `\u200b`-style escapes in test sources into the raw invisible characters. Ruff's confusable-character rule (RUF001) flagged them, and test files now build such characters with `chr()` so the sources stay ASCII.
+
+### Not done here
+No real model was run in this environment (no network, no model). The gate does not depend on one; AI.md §5 describes how to measure a real backend's rejection rate on the corpus.
+
+---
+
 ## 2026-11-18 — Phase 8: dashboard
 
 ### Decisions forced by the environment turned out better

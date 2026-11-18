@@ -43,6 +43,7 @@ from cyberintel.web.views import (
     NewsQuery,
     StoryQuery,
     VulnQuery,
+    ai_panel,
     build_env,
     parse_query,
     render,
@@ -133,6 +134,7 @@ def create_app(
     throttle: LoginThrottle | None = None,
     secure_cookies: bool = True,
     hsts: bool = False,
+    ai_enabled: bool = False,
 ) -> Starlette:
     env: Environment = build_env()
     throttle = throttle or LoginThrottle()
@@ -226,7 +228,10 @@ def create_app(
         detail = reader.story_detail(slug)
         if detail is None:
             raise HTTPException(404)
-        return page(request, "story.html", nav="stories", **detail)
+        # The AI layer is optional: with no provider configured the panel does not exist
+        # and the ai_* tables are never queried.
+        ai = ai_panel(reader.story_ai(detail["s"]["id"])) if ai_enabled else None
+        return page(request, "story.html", nav="stories", ai=ai, ai_enabled=ai_enabled, **detail)
 
     @login_required
     def news(request: Request) -> Response:

@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Cyber Intelligence Platform
 
-> Status: **v0.4** (2026-11-18). Phases 6–8 built (ingestion, database, dashboard); see ENGINEERING_LOG.md.
+> Status: **v0.5** (2026-11-18). Phases 6–9 built (ingestion, database, dashboard, optional AI layer); see ENGINEERING_LOG.md and AI.md.
 > Companion docs: `THREAT_MODEL.md` (security design), `SCHEMA.md` (current archive format).
 
 ## 1. Decision record (ADR-001): hybrid architecture
@@ -38,6 +38,14 @@
 **Why.** (1) A tool that renders attacker-controlled text should give an escaping bug nowhere to run: with no script sources allowed, even a missed escape cannot execute. (2) FastAPI's value (OpenAPI, JSON body models) serves JSON APIs, not this read-only HTML dashboard; Starlette is its foundation with a smaller surface. (3) Fewer dependencies: no FastAPI, no python-multipart (the login form is parsed with a size-capped stdlib parser).
 
 **Trade-off.** No in-page interactivity (live filtering, sorting without reload). Acceptable for a single-user, read-mostly tool; a JSON API can be added later without changing this decision.
+
+## 1d. ADR-004: Optional AI layer, gated by containment under a compromised model
+
+**Decision.** The AI layer is optional and **off by default** (`CIT_AI_PROVIDER=none`). Backends: a local model (Ollama) or a hosted API with the operator's own key; no paid service is required to run the platform. The release gate assumes the model is *fully compromised* by its input: a malicious-provider simulator returns exactly what each of 29 hostile documents asks for, and the gate passes only if the output validator rejects it, nothing reaches the dashboard, and no fact table changes (verified against PostgreSQL). Details: AI.md.
+
+**Why.** Prompt-level defences (delimiters, "treat this as data") reduce how often injection works but cannot be proven. Mechanical output validation plus capability removal (no tools, no network, no writes outside `ai_*`) can be proven with tests, and remain true whichever model is plugged in. Making the layer optional means the platform's value never depends on it.
+
+**Trade-off.** Schema-valid manipulation (a wrong but plausible summary, in-range score changes) cannot be blocked mechanically. It is contained instead: AI text has no authority, sits under the facts, is labelled, and names its sources, model and prompt version.
 
 ## 2. System overview
 
@@ -189,7 +197,7 @@ Before Phase 2, check the current state of the CVE/NVD ecosystem (enrichment bac
 | 6 | Collectors: KEV, NVD, EPSS, ATT&CK, 20 RSS | Re-running is idempotent; tests use recorded fixtures |
 | 7 | Schema + Alembic migrations + enrichment | KEV/NVD/EPSS joins verified against the archive's JSON |
 | 8 | FastAPI + HTMX dashboard | Lists developments, CVE detail, filters by score/track |
-| 9 | AI layer (structured outputs, provenance) | Every summary links its input docs; injection test suite passes |
+| 9 | AI layer (structured outputs, provenance) — **done** (ADR-004, AI.md) | Every summary links its input docs; injection test suite passes |
 | 10 | Compose deployment on Proxmox | Deployed and reachable only over the VPN; restore from backup tested |
 | 11 | Documentation | README, ARCHITECTURE, THREAT_MODEL, DATA_SOURCES, SCORING, DEPLOYMENT, screenshots |
 
