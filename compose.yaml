@@ -37,7 +37,7 @@ x-app: &app
     PGCONNECT_TIMEOUT: "10"
     PGSSLMODE: disable # traffic never leaves the internal `data` network
 
-x-db-image: &db-image ${CIT_POSTGRES_IMAGE:-postgres:16-bookworm@sha256:POSTGRES_DIGEST}
+x-db-image: &db-image ${CIT_POSTGRES_IMAGE:-postgres:16-bookworm@sha256:a49f7438ba03589f9b1ca062f2da82e899b48ea1dc50d2449fa09a70be83ebca}
 
 services:
   db:
@@ -100,7 +100,7 @@ services:
     <<: *hardening
     image: ${CIT_EGRESS_IMAGE:-cyber-intel-egress:local}
     build: { context: deploy/squid }
-    user: proxy
+    user: "13:13" # Debian proxy user
     mem_limit: 256m
     pids_limit: 64
     tmpfs:
@@ -208,7 +208,7 @@ services:
   ollama:
     <<: *hardening
     profiles: [ollama]
-    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:OLLAMA_TAG}
+    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:0.40.16}
     read_only: false # model store and runtime files
     mem_limit: ${CIT_OLLAMA_MEM:-8g}
     pids_limit: 512
@@ -221,7 +221,7 @@ services:
   ollama-pull:
     <<: *hardening
     profiles: [ollama-pull]
-    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:OLLAMA_TAG}
+    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:0.40.16}
     read_only: false
     restart: "no"
     volumes: [ollama:/root/.ollama]
