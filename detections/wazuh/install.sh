@@ -55,6 +55,25 @@ if [ "$mode" = install ] && [ -z "${WAZUH_HOME:-}" ]; then
     fi
 fi
 
+# Validate before restarting: each daemon parses its own sections in test mode (-t).
+# A bad block is rolled back while the running manager keeps running untouched.
+failed=""
+for daemon in wazuh-logcollector wazuh-syscheckd wazuh-modulesd wazuh-analysisd; do
+    bin="$OSSEC/bin/$daemon"
+    [ -x "$bin" ] || continue
+    if ! out="$("$bin" -t 2>&1)"; then
+        failed="$daemon"
+        echo "config check failed in $daemon:" >&2
+        printf '%s\n' "$out" | grep -iE "error|critical|invalid" | head -n 10 >&2
+        break
+    fi
+done
+if [ -n "$failed" ]; then
+    cp -p "$backup" "$CONF"
+    echo "restored $backup; wazuh-manager was not restarted" >&2
+    exit 1
+fi
+
 if $SYSTEMCTL restart wazuh-manager && sleep "${CIT_RESTART_WAIT:-5}" \
     && $SYSTEMCTL is-active --quiet wazuh-manager; then
     echo "wazuh-manager restarted with the cyber-intel block ($mode); backup: $backup"

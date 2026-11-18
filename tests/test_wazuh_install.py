@@ -97,3 +97,31 @@ def test_relative_dir_refused_even_if_it_exists(tmp_path: Path) -> None:
     r = run(env, "cit", cwd=tmp_path)  # tmp_path/cit/compose.yaml exists
     assert r.returncode == 1 and "absolute" in r.stderr
     assert conf.read_text() == ORIGINAL
+
+
+def test_failed_config_check_rolls_back_without_restart(tmp_path: Path) -> None:
+    conf, cit, env = setup(tmp_path)
+    bindir = Path(env["WAZUH_HOME"]) / "bin"
+    bindir.mkdir()
+    checker = bindir / "wazuh-syscheckd"
+    checker.write_text(
+        "#!/bin/sh\necho 'wazuh-syscheckd: ERROR: (1235): Invalid value for element'\nexit 1\n"
+    )
+    checker.chmod(0o755)
+    r = run(env, str(cit))
+    assert r.returncode == 1
+    assert "config check failed in wazuh-syscheckd" in r.stderr and "(1235)" in r.stderr
+    assert conf.read_text() == ORIGINAL
+    assert not (tmp_path / "calls").exists()  # the manager was never restarted
+
+
+def test_passing_config_check_then_restart(tmp_path: Path) -> None:
+    _, cit, env = setup(tmp_path)
+    bindir = Path(env["WAZUH_HOME"]) / "bin"
+    bindir.mkdir()
+    for d in ("wazuh-logcollector", "wazuh-syscheckd"):
+        (bindir / d).write_text("#!/bin/sh\nexit 0\n")
+        (bindir / d).chmod(0o755)
+    r = run(env, str(cit))
+    assert r.returncode == 0, r.stderr
+    assert "restart wazuh-manager" in (tmp_path / "calls").read_text()
