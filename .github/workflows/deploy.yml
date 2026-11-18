@@ -97,7 +97,7 @@ jobs:
           echo "CIT_WEB_ALLOWED_HOSTS=localhost" > .env
           printf 'ci-dashboard-password-123\n' | sudo deploy/scripts/make-secrets.sh
           sudo ls -l deploy/secrets
-          test "$(sudo stat -c '%U:%G %a' deploy/secrets/pg_web_password)" = "root:10001 440"
+          test "$(sudo stat -c '%u:%g %a' deploy/secrets/pg_web_password)" = "0:10001 440"
       - name: Start stack
         run: |
           docker compose up -d db migrate egress web backup
