@@ -2,7 +2,7 @@
 
 A self-hosted cyber threat-intelligence platform for one analyst's homelab. It collects vulnerability and threat data from authoritative sources, enriches and de-duplicates it, and produces a daily briefing. An AI layer explains and connects the data but is **never the source of truth**.
 
-> **Status: Phases 6–7 complete.** Hardened ingestion with weekly live verification of every source; PostgreSQL store whose constraints and integrity rules are enforced in SQL; cross-day story identity; an ingest runner with backoff and an audit trail. Dashboard (Phase 8) is next. See the [roadmap](#roadmap).
+> **Status: Phases 6–8 complete.** Hardened ingestion with weekly live verification of every source; a PostgreSQL store with integrity rules enforced in SQL; cross-day story identity; and a zero-JavaScript dashboard with a transparent priority score. The AI analysis layer (Phase 9) is next. See the [roadmap](#roadmap).
 
 ## Why it exists
 
@@ -33,9 +33,11 @@ It started as a scheduled AI research agent that writes a daily intel brief into
 | `store/migrate.py` | Migration runner: SHA-256 tamper/drift detection, advisory lock for concurrent deployers | T15 |
 | `store/repo.py`, `store/rows.py` | Transactional repository; pure row mappers; batches as one `jsonb` parameter | T10, T14 |
 | `ingest.py` | Runner: due/backoff scheduling, incremental NVD windows, CVE.org enrichment queue, `fetch_runs` audit trail | T1, T4 |
+| `web/app.py`, `web/auth.py` | Dashboard: Starlette, **zero JavaScript**, CSP `default-src 'none'`, host allowlist (anti DNS-rebinding), scrypt + signed `__Host-` sessions, throttled login, same-origin POSTs only, read-only DB sessions | T9, T13, T14 |
+| `store/migrations/0002_overview.up.sql` | Transparent 0–100 priority (exploitation evidence, EPSS, CVSS, ransomware, recency), every component visible | — |
 | `eval/archive.py` | Loads the agent's archive as gold data; links stories across days by CVE, title and **rarity-weighted vendor/product entities**, with a CVE-disagreement veto and roll-up isolation; recall@k | — |
 
-**Test suite:** ~250 offline tests, ~40 PostgreSQL tests (SQL via psql + repository via psycopg, in CI against a PostgreSQL 16 service), and a weekly live-source job. Integrity rules are verified by mutation testing. `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
+**Test suite:** ~330 offline tests (incl. the full web layer), ~60 PostgreSQL tests (SQL via psql + repository via psycopg, in CI against a PostgreSQL 16 service), and a weekly live-source job. Integrity rules are verified by mutation testing. `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
 
 ## Run it
 
@@ -50,6 +52,11 @@ python -m cyberintel.store.migrate up    # apply schema (checksum-verified)
 python -m cyberintel.ingest              # run every due source once (cron/systemd timer)
 python -m cyberintel.store.archive_import /path/to/cyber-intel-archive
 python -m cyberintel.eval.archive /path/to/cyber-intel-archive   # story-linking report
+
+# Dashboard (binds 127.0.0.1:8080; put Tailscale/WireGuard in front)
+python -m cyberintel.web.auth hash-password   # -> CIT_WEB_PASSWORD_HASH
+python -m cyberintel.web.auth new-secret      # -> CIT_WEB_SECRET
+python -m cyberintel.web.server
 ```
 
 ## Roadmap
@@ -61,8 +68,8 @@ python -m cyberintel.eval.archive /path/to/cyber-intel-archive   # story-linking
 | 6 | Ingestion: pure core | ✅ |
 | 6b | Network layer + collectors + live source verification | ✅ |
 | 7 | PostgreSQL (SQL-first), integrity rules in SQL, story identity with entity linking, ingest runner | ✅ |
-| 8 | **next:** FastAPI + HTMX dashboard | |
-| 9 | AI layer: structured outputs, provenance, prompt-injection test corpus | |
+| 8 | Dashboard: Starlette, zero-JS, strict CSP, auth, priority view | ✅ |
+| 9 | **next:** AI layer: structured outputs, provenance, prompt-injection test corpus | |
 | 10 | Hardened Docker Compose on Proxmox, VPN-only access | |
 | 11 | Docs: DATA_SOURCES, SCORING, DEPLOYMENT, screenshots | |
 
@@ -70,6 +77,7 @@ python -m cyberintel.eval.archive /path/to/cyber-intel-archive   # story-linking
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): decision record, pipeline, data model, deployment
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): trust boundaries, STRIDE, mitigations, verification
+- [`docs/SCORING.md`](docs/SCORING.md): the priority model, development scores, CVSS headline policy
 - [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md): endpoints, limits, and what the 2026 NVD change means for the design
 - [`docs/ENGINEERING_LOG.md`](docs/ENGINEERING_LOG.md): decisions and findings, including the ones that didn't work
 

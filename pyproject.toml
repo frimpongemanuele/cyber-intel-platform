@@ -16,6 +16,8 @@ dependencies = [
 # core stays installable and testable with a minimal dependency surface.
 net = ["httpx>=0.28,<0.29"]
 db = ["psycopg[binary]>=3.2,<4"]  # SQL-first: no ORM (see ARCHITECTURE ADR-002)
+# Dashboard (ADR-003): server-rendered, zero JavaScript. No FastAPI/python-multipart needed.
+web = ["starlette>=0.46,<2", "jinja2>=3.1.4,<4", "uvicorn>=0.30"]
 dev = ["pytest>=8", "ruff>=0.8", "mypy>=1.13"]
 
 [build-system]
@@ -40,6 +42,9 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
 ignore = ["S101"]  # assert is fine in tests
 
 [tool.ruff.lint.per-file-ignores]
+# Statements are composed from module-level constant fragments only; user input selects a
+# key from an allowlist (VULN_SORTS) and is never interpolated. Enforced by tests.
+"src/cyberintel/store/read_sql.py" = ["S608"]
 "tests/**" = ["S104", "S105", "S106", "S603", "S608"]  # test data / fixed table names / psql harness
 
 [tool.mypy]
@@ -47,6 +52,9 @@ strict = true
 python_version = "3.12"
 mypy_path = "src"
 packages = ["cyberintel"]
+
+[tool.setuptools.package-data]
+cyberintel = ["store/migrations/*.sql", "web/templates/*.html", "web/static/*"]
 
 [[tool.mypy.overrides]]
 module = ["defusedxml.*"]

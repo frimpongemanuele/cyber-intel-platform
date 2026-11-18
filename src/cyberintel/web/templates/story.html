@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ s.title }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/stories">Stories</a> /</p>
+<h1>{{ s.title }}{% if s.is_rollup %} <span class="tag">roll-up</span>{% endif %}</h1>
+<p class="muted">{{ s.first_seen|date }} → {{ s.last_seen|date }} · {{ s.status }} · confidence {{ s.confidence }}</p>
+<section class="cols">
+<div>
+<h2>Timeline</h2>
+<ol class="timeline">{% for x in sightings %}<li><b>{{ x.day|date }}</b> <span class="muted">{{ x.origin }} · {{ x.external_id }}{% if x.urgency is not none %} · urgency {{ x.urgency }}{% endif %}</span></li>{% endfor %}</ol>
+{% if links %}
+<h2>Related</h2>
+<ul class="list">{% for l in links %}<li><a href="/stories/{{ l.slug|urlencode }}">{{ l.title }}</a> <span class="muted">{{ "rolls up into this" if l.direction == "in" else "this rolls up" }} · {{ l.method }}</span></li>{% endfor %}</ul>
+{% endif %}
+</div>
+<div>
+<h2>CVEs</h2>
+<table>
+  <thead><tr><th>CVE</th><th>Priority</th><th>What</th></tr></thead>
+  <tbody>{% for c in cves %}<tr><td><a href="/vulns/{{ c.cve_id|urlencode }}">{{ c.cve_id }}</a>{% if c.in_kev %} <span class="tag tag-kev">KEV</span>{% endif %}</td><td>{{ c.priority|num }}</td><td>{{ c.title or "not yet fetched" }}</td></tr>{% else %}<tr><td colspan="3" class="muted">No CVEs linked.</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+</section>
+{% endblock %}

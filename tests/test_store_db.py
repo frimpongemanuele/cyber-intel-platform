@@ -63,12 +63,12 @@ def table_count(conn: psycopg.Connection, table: str, where: str = "true") -> in
 
 def test_migrations_apply_idempotently_and_roll_back(empty_db: str) -> None:
     with psycopg.connect(dbname=empty_db, autocommit=True) as c:
-        assert migrate.apply(c) == [1]
+        assert migrate.apply(c) == [1, 2]
         assert migrate.apply(c) == []
         assert table_count(c, "pg_tables", "schemaname = 'public'") == 14  # + schema_migrations
-        assert migrate.rollback(c, 0) == [1]
+        assert migrate.rollback(c, 0) == [2, 1]  # newest first
         assert table_count(c, "pg_tables", "schemaname = 'public'") == 1
-        assert migrate.apply(c) == [1]
+        assert migrate.apply(c) == [1, 2]
 
 
 def test_tampered_checksum_stops_migrations(empty_db: str) -> None:
@@ -96,7 +96,7 @@ def test_concurrent_deployers_apply_each_migration_once(empty_db: str) -> None:
     for t in threads:
         t.join()
     assert not errors, errors
-    assert sorted(v for r in results for v in r) == [1]  # applied exactly once overall
+    assert sorted(v for r in results for v in r) == [1, 2]  # each applied exactly once
 
 
 # --------------------------------------------------------------------------- repository

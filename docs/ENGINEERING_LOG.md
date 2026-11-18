@@ -4,6 +4,30 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Phase 8: dashboard
+
+### Decisions forced by the environment turned out better
+FastAPI was missing but Starlette 1.7, Jinja2 and uvicorn were present, and HTMX could not be downloaded. Both constraints pointed to the stronger design: server-rendered Starlette with **zero JavaScript** and CSP `default-src 'none'` (ADR-003). Starlette's TestClient needs httpx (also missing), so a ~40-line ASGI driver (`tests/asgi.py`) calls the app directly. The full web layer (auth, CSRF, headers, routing, templates) is tested locally, not just in CI.
+
+### Priority as a transparent baseline
+A SQL view (`0002_overview`) computes a 0–100 priority from exploitation evidence (KEV 40 / SSVC active 30 / PoC 10), EPSS percentile (20), CVSS (20), ransomware (10) and recency (10). Every component is a column and is shown on the CVE page. This is the baseline the AI layer will be measured against (SCORING.md).
+
+### Escaping tested structurally, not by string matching
+The first XSS assertions used `or`-chained substring checks that could pass in cases they should not. They were replaced by parsing each rendered page with the stdlib HTML parser and asserting there are no dangerous elements, no `on*` handlers and no `javascript:`/`data:` URLs, which is what an attacker actually needs. The checker has its own test proving it flags each pattern. The fake reader serves script tags, attribute breakouts and `javascript:` URLs on every page.
+
+### Mutation results
+Autoescape off → 10 failures; auth gate removed → 10; `safe_url` disabled → 5; weak CSP → 4; login CSRF check removed → 3; host allowlist removed → 1. Read model: wildcard escaping, numeric CVE ordering and rejected-record hiding each caught.
+
+### Bugs the tests caught
+- `page()` took `status` as the HTTP code while the error template also used a `status` variable, so **every error page would have crashed**. Renamed the template variable.
+- `{{ "s" if n != 1 }}` with no `else` is *undefined*, which `StrictUndefined` turns into an error instead of blank output.
+- **Packaging:** Starlette/Jinja2/uvicorn were never declared as dependencies, and neither were the migration SQL files or templates as package data. Both worked only because of the local environment and editable installs; a built wheel would have shipped without a schema. Fixed (`web` extra, `package-data`).
+
+### Auth in the standard library
+scrypt hashing with cost floors enforced at startup (no silent downgrade); HMAC-signed expiring sessions in `__Host-` cookies; login throttling (per client and global) applied **before** the password is checked; client identity never taken from `X-Forwarded-For`; no unauthenticated mode.
+
+---
+
 ## 2026-11-18 — Phase 7: database, story identity, ingest runner
 
 ### SQL-first, tested against real PostgreSQL without a Python driver

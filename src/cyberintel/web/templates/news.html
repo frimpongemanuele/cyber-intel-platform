@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}News{% endblock %}
+{% block content %}
+<h1>News</h1>
+<form method="get" action="/news" class="filters">
+  <input type="search" name="q" value="{{ query.q or '' }}" placeholder="Search titles and excerpts…" maxlength="100" aria-label="Search">
+  <label>Source
+    <select name="source">
+      <option value="">All sources</option>
+      {% for name, tier in sources %}<option value="{{ name }}"{% if query.source == name %} selected{% endif %}>{{ name }} ({{ tier }})</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit">Apply</button>
+</form>
+<ul class="news">
+{% for d in rows %}
+  <li>
+    <h3>{{ m.ext_link(d.url, d.title) }}</h3>
+    <p class="muted">{{ d.source_name }}{% if tiers.get(d.source_name) %} · {{ tiers[d.source_name] }}{% endif %} · {{ (d.published_at or d.first_seen_at)|date }}</p>
+    {% if d.excerpt %}<p>{{ d.excerpt }}</p>{% endif %}
+    {% if d.cves %}<p>{% for c in d.cves %}<a class="tag" href="/vulns/{{ c|urlencode }}">{{ c }}</a> {% endfor %}</p>{% endif %}
+  </li>
+{% else %}<li class="muted">No articles match.</li>{% endfor %}
+</ul>
+{{ m.pager(pager) }}
+{% endblock %}
