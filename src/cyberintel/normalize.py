@@ -14,6 +14,18 @@ _CVE = re.compile(r"\bCVE-(\d{4})-(\d{4,7})\b", re.IGNORECASE)
 CVE_ID = re.compile(r"^CVE-\d{4}-\d{4,7}$")
 MAX_SCAN_CHARS = 2_000_000
 
+_ENTITY_NON_ALNUM = re.compile(r"[^A-Za-z0-9]")
+
+
+def entity_norm(text: str) -> str:
+    """Vendor/product normalization: ASCII alphanumerics, lower-cased ("N-able" -> "nable").
+
+    MUST stay identical to the SQL in store.sql.INSERT_PRODUCTS
+    (``lower(regexp_replace(x, '[^A-Za-z0-9]', '', 'g'))``); parity is tested.
+    """
+    return _ENTITY_NON_ALNUM.sub("", text).lower()
+
+
 _TRACKING_PARAMS = frozenset(
     {"fbclid", "gclid", "dclid", "msclkid", "mc_cid", "mc_eid", "igshid", "_hsenc", "_hsmi",
      "ref", "ref_src", "spm", "yclid"}
