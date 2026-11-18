@@ -126,6 +126,21 @@ jobs:
           ! as ingest "INSERT INTO ai_usage (day, provider, model) VALUES (current_date, 'p', 'm')"
           ! as ingest "CREATE TABLE planted (x int)"
           ! docker compose exec -T db sh -c "PGPASSWORD=wrong psql -X -h 127.0.0.1 -U cit_web -d cit -c 'select 1'"
+      - name: Dashboard container cannot open outbound connections (host rule)
+        run: |
+          probe='import socket,sys
+          try:
+              socket.create_connection(("1.1.1.1", 443), timeout=5).close(); sys.exit(0)
+          except OSError:
+              sys.exit(1)'
+          # without the rule the web network has a route out: prove the probe can tell
+          docker compose exec -T web python -c "$probe"
+          sudo deploy/scripts/host-firewall.sh
+          sudo deploy/scripts/host-firewall.sh   # idempotent
+          test "$(sudo iptables -S DOCKER-USER | grep -c cit-web-no-egress)" = 1
+          ! docker compose exec -T web python -c "$probe"
+          # inbound requests through the published port still work
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: localhost' http://127.0.0.1:8080/healthz)" = 200
       - name: Egress allowlist holds
         run: docker compose run --rm --no-deps -T --entrypoint python ingest - < deploy/ci/egress_probe.py
       - name: Real ingestion through the proxy (CISA KEV)
