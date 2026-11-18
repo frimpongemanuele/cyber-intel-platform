@@ -4,6 +4,27 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Phase 10: hardened deployment
+
+### Verification strategy: the real stack, in CI
+This environment can run Docker but cannot pull images, so every deployment control is proven on the CI runner instead: real images from digest-pinned bases, the real `make-secrets.sh`, `docker compose up`, then probes from inside the containers. Passing run: 5/5 container hardening checks, 6/6 egress checks, web egress blocked by the host rule (and shown to be open without it), 1,782 KEV entries ingested through the proxy, login and an authenticated page over that data, backup plus a passing restore check. Locally: the role init script, owner-run migrations and grants, password quoting and backup/restore were tested against a fresh scram-auth PostgreSQL 16 cluster, including a tampered dump that the restore check must reject.
+
+### Findings the real stack produced (none visible in unit tests)
+- **Proxy mode needs no local DNS, so the guard must not ask for it.** The URL guard resolved names to check that every address is public; on the collector's internal network there is no outside DNS, so every fetch failed. In proxy mode the guard now keeps allowlist, scheme, port, IP-literal, userinfo and redirect checks and skips DNS; the proxy's post-resolution private-range deny takes over, and the egress probe proves it (metadata IP refused).
+- **Squid stores IPv4 as IPv4-mapped IPv6.** The deny list included `::ffff:0:0/96`, which to squid means *all of IPv4*. Squid warned and dropped a conflicting entry; a different ordering could have silently denied, or worse, mis-scoped the rule. Removed, with a test that it stays out and a test that no directive carries an inline comment (squid has none).
+- **Supplementary groups vanish on the root→postgres switch.** Secrets are `root:10001 0440`; the PostgreSQL entrypoint starts as root and `gosu`s to postgres, which resets groups, so `group_add` would not have applied. Running the db container as uid 999 from the start fixed it and removed every capability the container had (CHOWN, SETUID, …).
+- **The squid pinger needs CAP_NET_RAW.** Disabled rather than granting the capability.
+- **`stat %G` prints UNKNOWN** for a gid with no host name; CI compares numeric ids.
+- **Package data.** `grants.sql` sat outside the declared package-data glob; it would have been missing from the wheel. Fixed before the image build.
+
+### Least privilege, tested both ways
+`grants.sql` is checked twice: with PostgreSQL's privilege functions plus real `SET ROLE` attempts (what each role must *not* do; each grant mutation is caught), and by running the production Store, AI runner and dashboard reader under their roles (what each role *must* do). The first catches over-granting, the second under-granting.
+
+### Pins without network access here
+Dependency hashes and image digests cannot be resolved from this environment, and CI artifact downloads are blocked, so the `pins` job prints the resolved lock and digests into its log; they were read from there and committed. The build only ever uses committed pins.
+
+---
+
 ## 2026-11-18 — Phase 9: optional AI layer
 
 ### Gate defined before code: containment under a compromised model

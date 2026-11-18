@@ -1,0 +1,175 @@
+name: deploy
+
+# Builds the production images and brings the real Compose stack up on the runner, then
+# proves the deployment controls hold: hardened containers, least-privilege database
+# roles, egress allowlist, authenticated dashboard over real data, backup + restore.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1" # weekly: rebuild + rescan picks up new base-image CVEs
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: Dockerfile lint (hadolint)
+        run: |
+          docker run --rm -i hadolint/hadolint hadolint --failure-threshold warning - < Dockerfile
+          docker run --rm -i hadolint/hadolint hadolint --failure-threshold warning - < deploy/squid/Dockerfile
+      - name: Shell lint (shellcheck)
+        run: shellcheck --severity=warning deploy/postgres/initdb/*.sh deploy/backup/*.sh deploy/scripts/*.sh
+      - name: Compose file valid (all profiles)
+        run: |
+          mkdir -p deploy/secrets
+          for s in pg_superuser_password pg_owner_password pg_ingest_password pg_web_password \
+                   pg_ai_password web_password_hash web_session_secret nvd_api_key ai_api_key; do
+            echo placeholder > "deploy/secrets/$s"
+          done
+          docker compose --profile ai --profile ollama --profile ollama-pull config -q
+      - name: No unresolved image pins
+        run: |
+          ! grep -nE "PYTHON_DIGEST|DEBIAN_DIGEST|POSTGRES_DIGEST|OLLAMA_TAG" \
+            Dockerfile deploy/squid/Dockerfile compose.yaml
+          grep -q -- "--hash=sha256:" deploy/requirements.lock
+
+  pins:
+    # Resolves current dependency hashes and image digests. Uploaded as an artifact so a
+    # maintainer can review and commit updates; the build itself only uses committed pins.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Resolve hash-pinned lock
+        run: |
+          python -m pip install pip-tools
+          pip-compile --quiet --generate-hashes --allow-unsafe --strip-extras \
+            --output-file /tmp/requirements.lock deploy/requirements.in
+      - name: Resolve image digests
+        run: |
+          ollama_tag="$(curl -fsSL https://api.github.com/repos/ollama/ollama/releases/latest \
+            | python -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')"
+          for img in python:3.12-slim-bookworm debian:bookworm-slim postgres:16-bookworm \
+                     "ollama/ollama:${ollama_tag}"; do
+            d="$(docker buildx imagetools inspect "$img" | awk '/^Digest:/ {print $2; exit}')"
+            echo "$img@$d"
+          done | tee /tmp/image-digests.txt
+      - name: Print resolved pins (review copy)
+        run: |
+          echo "=== BEGIN requirements.lock ==="; cat /tmp/requirements.lock; echo "=== END requirements.lock ==="
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resolved-pins
+          path: |
+            /tmp/requirements.lock
+            /tmp/image-digests.txt
+
+  smoke:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: cit
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: Build images
+        run: docker compose build
+      - name: Image vulnerability scan (Trivy; fail on fixable CRITICAL)
+        run: |
+          for img in cyber-intel-platform:local cyber-intel-egress:local; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+              image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$img"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+              image --quiet --scanners vuln --ignore-unfixed --severity HIGH --exit-code 0 "$img"
+          done
+      - name: Secrets via the real setup script
+        run: |
+          echo "CIT_WEB_ALLOWED_HOSTS=localhost" > .env
+          printf 'ci-dashboard-password-123\n' | sudo deploy/scripts/make-secrets.sh
+          sudo ls -l deploy/secrets
+          test "$(sudo stat -c '%u:%g %a' deploy/secrets/pg_web_password)" = "0:10001 440"
+      - name: Start stack
+        run: |
+          docker compose up -d db migrate egress web backup
+          for svc in db web egress; do
+            timeout 180 sh -c "until [ \"\$(docker inspect -f '{{.State.Health.Status}}' cit-$svc-1)\" = healthy ]; do sleep 3; done"
+          done
+          test "$(docker inspect -f '{{.State.ExitCode}}' cit-migrate-1)" = 0
+          docker compose logs migrate
+      - name: Containers are hardened
+        run: |
+          docker compose exec -T web python - < deploy/ci/container_probe.py
+          for c in cit-web-1 cit-egress-1 cit-db-1 cit-backup-1; do
+            test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' $c)" = true
+            docker inspect -f '{{.HostConfig.SecurityOpt}}' $c | grep -q no-new-privileges
+          done
+          # db port is not published; web only on loopback
+          ! docker port cit-db-1 | grep -q .
+          docker port cit-web-1 8080 | grep -qx '127.0.0.1:8080'
+      - name: Database roles enforce least privilege
+        run: |
+          as() { docker compose exec -T db sh -c "PGPASSWORD=\$(cat /run/secrets/pg_$1_password) psql -X -q -h 127.0.0.1 -U cit_$1 -d cit -v ON_ERROR_STOP=1 -c \"$2\""; }
+          as web "SELECT count(*) FROM vulnerability_overview"
+          ! as web "INSERT INTO source_state (source_name) VALUES ('evil')"
+          ! as web "SELECT raw_output FROM ai_analyses"
+          ! as ai "UPDATE kev_entries SET ransomware_known = false"
+          ! as ingest "INSERT INTO ai_usage (day, provider, model) VALUES (current_date, 'p', 'm')"
+          ! as ingest "CREATE TABLE planted (x int)"
+          ! docker compose exec -T db sh -c "PGPASSWORD=wrong psql -X -h 127.0.0.1 -U cit_web -d cit -c 'select 1'"
+      - name: Dashboard container cannot open outbound connections (host rule)
+        run: |
+          probe='import socket,sys
+          try:
+              socket.create_connection(("1.1.1.1", 443), timeout=5).close(); sys.exit(0)
+          except OSError:
+              sys.exit(1)'
+          # without the rule the web network has a route out: prove the probe can tell
+          docker compose exec -T web python -c "$probe"
+          sudo deploy/scripts/host-firewall.sh
+          sudo deploy/scripts/host-firewall.sh   # idempotent
+          test "$(sudo iptables -S DOCKER-USER | grep -c cit-web-no-egress)" = 1
+          ! docker compose exec -T web python -c "$probe"
+          # inbound requests through the published port still work
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: localhost' http://127.0.0.1:8080/healthz)" = 200
+      - name: Egress allowlist holds
+        run: docker compose run --rm --no-deps -T --entrypoint python ingest - < deploy/ci/egress_probe.py
+      - name: Real ingestion through the proxy (CISA KEV)
+        run: |
+          docker compose run --rm --no-deps ingest cyberintel.ingest --source cisa-kev --force
+          n="$(docker compose exec -T db sh -c 'PGPASSWORD=$(cat /run/secrets/pg_web_password) psql -X -t -A -h 127.0.0.1 -U cit_web -d cit -c "SELECT count(*) FROM kev_entries"')"
+          echo "kev rows: $n"; test "$n" -gt 1000
+      - name: Dashboard works end to end
+        run: |
+          base=http://127.0.0.1:8080
+          h='Host: localhost'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "$h" $base/healthz)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' $base/healthz)" = 400
+          curl -s -D - -o /dev/null -H "$h" $base/ | tee /tmp/h.txt
+          grep -qi "^location: /login" /tmp/h.txt
+          grep -qi "content-security-policy: default-src 'none'" /tmp/h.txt
+          curl -s -D /tmp/login.txt -o /dev/null -H "$h" -H 'Sec-Fetch-Site: same-origin' \
+            --data-urlencode 'password=ci-dashboard-password-123' $base/login
+          cookie="$(grep -i '^set-cookie: __Host-cit_session=' /tmp/login.txt | sed 's/^[^:]*: //; s/;.*//' | tr -d '\r')"
+          test -n "$cookie"
+          curl -sf -H "$h" -H "Cookie: $cookie" "$base/vulns?kev=1" | grep -q 'CVE-'
+      - name: Backup and restore check
+        run: |
+          docker compose run --rm --no-deps backup --once
+          docker compose exec -T db sh /backup-tools/restore-check.sh | tee /tmp/restore.txt
+          grep -q "RESTORE CHECK PASSED" /tmp/restore.txt
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -271,3 +271,27 @@ def test_transport_caps_response(server: str) -> None:
 def test_transport_error_is_generic() -> None:
     with pytest.raises(ProviderError, match="transport error"):
         urllib_post_json("http://127.0.0.1:9/x", {}, b"{}", 2.0)
+
+
+def test_explicit_proxy_is_used(server: str) -> None:
+    # The loopback server plays the proxy: a proxied request arrives in absolute form.
+    _Handler.routes["http://model.invalid:11434/api/chat"] = (
+        200,
+        {},
+        json.dumps({"message": {"content": "{}"}}).encode(),
+    )
+    p = provider_from_env(
+        {
+            "CIT_AI_PROVIDER": "ollama",
+            "CIT_AI_MODEL": "m",
+            "CIT_AI_OLLAMA_URL": "http://model.invalid:11434",
+            "CIT_AI_PROXY": server,
+        }
+    )
+    assert p.complete(PROMPT).text == "{}"
+
+
+@pytest.mark.parametrize("proxy", ["ftp://p:21", "http://user:pw@p:3129", "http://p:3129/?x=1"])
+def test_bad_proxy_refused(proxy: str) -> None:
+    with pytest.raises(ValueError):
+        provider_from_env({"CIT_AI_PROVIDER": "ollama", "CIT_AI_MODEL": "m", "CIT_AI_PROXY": proxy})

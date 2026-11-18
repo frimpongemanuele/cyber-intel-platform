@@ -7,7 +7,8 @@ secrets, so secrets never need to sit in the environment of the process tree):
 
     CIT_WEB_PASSWORD_HASH[_FILE]   scrypt hash      (python -m cyberintel.web.auth hash-password)
     CIT_WEB_SECRET[_FILE]          session secret   (python -m cyberintel.web.auth new-secret)
-    CIT_DATABASE_URL[_FILE]        libpq DSN for a SELECT-only role
+    CIT_DATABASE_URL[_FILE]        libpq DSN for a SELECT-only role (or PG* vars plus
+    CIT_DB_PASSWORD_FILE; see cyberintel.dbconfig)
     CIT_WEB_ALLOWED_HOSTS          comma-separated Host header allowlist (default localhost)
     CIT_WEB_BIND / CIT_WEB_PORT    default 127.0.0.1:8080 (put Tailscale/WireGuard in front)
     CIT_WEB_INSECURE_COOKIES=1     plain-http local development only
@@ -33,6 +34,7 @@ def secret(name: str) -> str | None:
 def main() -> int:
     import uvicorn
 
+    from cyberintel.dbconfig import database_dsn
     from cyberintel.sources import load_registry
     from cyberintel.web.app import create_app
     from cyberintel.web.auth import AuthConfig
@@ -43,7 +45,7 @@ def main() -> int:
     sources = [{"name": s.name, "kind": s.kind, "tier": s.trust_tier} for s in registry.sources]
     hosts = [h.strip() for h in os.environ.get("CIT_WEB_ALLOWED_HOSTS", "localhost").split(",")]
     app = create_app(
-        DbReader(psycopg_connector(secret("CIT_DATABASE_URL") or "")),
+        DbReader(psycopg_connector(database_dsn())),
         auth,
         sources=sources,
         allowed_hosts=[h for h in hosts if h],

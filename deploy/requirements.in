@@ -1,0 +1,12 @@
+# Runtime dependencies of the container image, resolved and hash-pinned into
+# deploy/requirements.lock by CI (job "lock"); the image installs with --require-hashes.
+# Keep in step with the extras in pyproject.toml ([net], [db], [web]).
+pydantic>=2.9,<3
+defusedxml>=0.7.1,<0.8
+httpx>=0.28,<0.29
+psycopg[binary]>=3.2,<4
+starlette>=0.46,<2
+jinja2>=3.1.4,<4
+uvicorn>=0.30
+# build backend, used once to install the project itself, then removed from the image
+setuptools>=75

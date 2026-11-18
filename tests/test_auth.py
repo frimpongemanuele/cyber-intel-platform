@@ -166,3 +166,19 @@ def test_config_fails_closed(stored: str) -> None:
         AuthConfig.from_values(stored, "ab" * 8)
     cfg = AuthConfig.from_values(stored, SECRET.hex())
     assert cfg.password.verify("correct horse battery staple")
+
+
+def test_hash_password_cli_stdin(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import io
+
+    from cyberintel.web.auth import main
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("correct horse battery\n"))
+    assert main(["hash-password", "--stdin"]) == 0
+    out = capsys.readouterr().out.strip()
+    assert PasswordHash.parse(out).verify("correct horse battery")
+    monkeypatch.setattr("sys.stdin", io.StringIO("short\n"))
+    assert main(["hash-password", "--stdin"]) == 1
+    assert capsys.readouterr().out == ""  # nothing that could be mistaken for a hash

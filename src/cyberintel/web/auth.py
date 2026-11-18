@@ -27,6 +27,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import sys
 import time
 from collections import deque
 from collections.abc import Callable
@@ -216,16 +217,24 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description="Dashboard auth helpers.")
     ap.add_argument("command", choices=["hash-password", "new-secret"])
+    ap.add_argument(
+        "--stdin",
+        action="store_true",
+        help="read the password from stdin (one line) instead of prompting; for scripts",
+    )
     args = ap.parse_args(argv)
     if args.command == "new-secret":
         print(secrets.token_hex(32))
         return 0
-    first = getpass.getpass("New dashboard password: ")
-    if first != getpass.getpass("Repeat password: "):
-        print("passwords do not match")
-        return 1
+    if args.stdin:
+        first = sys.stdin.readline().rstrip("\r\n")
+    else:
+        first = getpass.getpass("New dashboard password: ")
+        if first != getpass.getpass("Repeat password: "):
+            print("passwords do not match", file=sys.stderr)
+            return 1
     if len(first) < 12:
-        print("use at least 12 characters")
+        print("use at least 12 characters", file=sys.stderr)
         return 1
     print(hash_password(first))
     return 0

@@ -17,3 +17,7 @@ dist/
 secrets/
 *.pem
 *.key
+
+# deployment
+deploy/secrets/
+backups/

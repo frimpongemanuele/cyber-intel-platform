@@ -54,7 +54,7 @@ mypy_path = "src"
 packages = ["cyberintel"]
 
 [tool.setuptools.package-data]
-cyberintel = ["store/migrations/*.sql", "web/templates/*.html", "web/static/*"]
+cyberintel = ["store/migrations/*.sql", "store/*.sql", "web/templates/*.html", "web/static/*"]
 
 [[tool.mypy.overrides]]
 module = ["defusedxml.*"]

@@ -75,9 +75,12 @@ class Registry(BaseModel):
                 return s
         raise KeyError(name)
 
+    def allowed_hosts(self) -> list[str]:
+        """Exact hosts, or ``.suffix`` entries, for enabled sources (app + proxy allowlist)."""
+        return sorted({h for s in self.enabled() for h in (s.host, *s.extra_hosts)})
+
     def allowlist(self) -> HostAllowlist:
-        hosts = {h for s in self.enabled() for h in (s.host, *s.extra_hosts)}
-        return HostAllowlist(sorted(hosts))
+        return HostAllowlist(self.allowed_hosts())
 
 
 def load_registry(path: Path) -> Registry:

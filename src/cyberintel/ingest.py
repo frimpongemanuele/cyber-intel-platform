@@ -233,32 +233,58 @@ def run_once(
 def main(argv: Sequence[str] | None = None) -> int:
     import psycopg
 
+    from cyberintel.dbconfig import database_dsn
     from cyberintel.net.fetch import SafeFetcher
     from cyberintel.sources import load_registry
     from cyberintel.store.repo import Store
 
-    ap = argparse.ArgumentParser(description="Run due ingestion jobs once.")
+    ap = argparse.ArgumentParser(description="Run due ingestion jobs.")
     ap.add_argument("--config", type=Path, default=Path("config/sources.toml"))
     ap.add_argument("--source", help="run only this source")
     ap.add_argument("--force", action="store_true", help="ignore poll intervals / backoff")
+    ap.add_argument(
+        "--every", type=float, help="keep running: check for due sources every N seconds"
+    )
     args = ap.parse_args(argv)
 
     registry = load_registry(args.config)
     proxy = os.environ.get("CIT_EGRESS_PROXY") or None
-    nvd_key = os.environ.get("CIT_NVD_API_KEY") or None  # never logged or put in URLs
-    with (
-        psycopg.connect(os.environ.get("CIT_DATABASE_URL", ""), autocommit=True) as conn,
-        SafeFetcher(registry.allowlist(), proxy=proxy) as fetcher,
-    ):
-        reports = run_once(
-            registry, fetcher, Store(conn), only=args.source, force=args.force, nvd_api_key=nvd_key
-        )
-    for r in reports:
-        print(
-            f"{r.source:28} {r.outcome:13} ok={r.records_ok:<7} rejected={r.records_rejected:<5}"
-            f" {r.detail[:80]}"
-        )
-    return 1 if any(r.outcome == "error" for r in reports) else 0
+    nvd_key = _optional_secret("CIT_NVD_API_KEY")  # never logged or put in URLs
+
+    def once() -> int:
+        with (
+            psycopg.connect(database_dsn(), autocommit=True) as conn,
+            SafeFetcher(registry.allowlist(), proxy=proxy) as fetcher,
+        ):
+            reports = run_once(
+                registry,
+                fetcher,
+                Store(conn),
+                only=args.source,
+                force=args.force,
+                nvd_api_key=nvd_key,
+            )
+        for r in reports:
+            print(
+                f"{r.source:28} {r.outcome:13} ok={r.records_ok:<7}"
+                f" rejected={r.records_rejected:<5} {r.detail[:80]}",
+                flush=True,
+            )
+        return 1 if any(r.outcome == "error" for r in reports) else 0
+
+    if args.every:
+        from cyberintel.loop import run_every
+
+        run_every(once, every=args.every, jitter=min(60.0, args.every / 10))
+        return 0
+    return once()
+
+
+def _optional_secret(name: str) -> str | None:
+    path = os.environ.get(f"{name}_FILE")
+    if path:
+        return Path(path).read_text(encoding="utf-8").strip() or None
+    return os.environ.get(name) or None
 
 
 if __name__ == "__main__":

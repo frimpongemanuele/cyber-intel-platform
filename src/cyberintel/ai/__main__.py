@@ -5,7 +5,7 @@
     python -m cyberintel.ai run [--limit N]     # analyse recent stories, within the token cap
 
 Configuration: see ``providers.provider_from_env`` plus
-    CIT_DATABASE_URL[_FILE]     libpq DSN (needs INSERT on ai_analyses / ai_usage only)
+    CIT_DATABASE_URL[_FILE]     libpq DSN, or PG* vars + CIT_DB_PASSWORD_FILE (role cit_ai)
     CIT_AI_DAILY_TOKEN_CAP      default 200000 (input + output, all models, per UTC day)
 """
 
@@ -31,6 +31,7 @@ from cyberintel.ai.runner import (
     usage_params,
 )
 from cyberintel.ai.schema import AnalysisInput
+from cyberintel.dbconfig import database_dsn
 from cyberintel.store import ai_sql
 
 
@@ -69,13 +70,6 @@ class PgAIRepo:
             self._rows(ai_sql.ADD_AI_USAGE, **usage_params(record, day))
 
 
-def _dsn() -> str:
-    path = os.environ.get("CIT_DATABASE_URL_FILE")
-    if path:
-        return Path(path).read_text(encoding="utf-8").strip()
-    return os.environ.get("CIT_DATABASE_URL", "")
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m cyberintel.ai", description="Optional AI analysis layer."
@@ -88,6 +82,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_run = sub.add_parser("run")
     p_run.add_argument("--limit", type=int, default=20)
     p_run.add_argument("--since-days", type=int, default=14)
+    p_run.add_argument("--every", type=float, help="keep running: one pass every N seconds")
     args = ap.parse_args(argv)
 
     provider = provider_from_env()
@@ -110,9 +105,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     from cyberintel.sources import load_registry
 
     tiers = {s.name: s.trust_tier for s in load_registry(args.config).sources}
-    with psycopg.connect(_dsn(), autocommit=True) as conn:
-        repo = PgAIRepo(conn, tiers)
-        if args.cmd == "prompt":
+    if args.cmd == "prompt":
+        with psycopg.connect(database_dsn(), autocommit=True) as conn:
+            repo = PgAIRepo(conn, tiers)
             cand = repo.by_slug(args.slug)
             if cand is None:
                 print("no such story", file=sys.stderr)
@@ -120,17 +115,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             prompt = build_prompt(repo.build_input(cand))
             print(prompt.system, "\n---\n", prompt.user, sep="")
             return 0
-        cap = int(os.environ.get("CIT_AI_DAILY_TOKEN_CAP", "200000"))
-        report = run(
-            repo,
-            provider,
-            now=datetime.now(UTC),
-            since_days=args.since_days,
-            limit=args.limit,
-            daily_token_cap=cap,
-        )
-    print(json.dumps(report.as_dict(), indent=2))
-    return 1 if report.stopped == "too many consecutive provider errors" else 0
+
+    cap = int(os.environ.get("CIT_AI_DAILY_TOKEN_CAP", "200000"))
+
+    def once() -> int:
+        with psycopg.connect(database_dsn(), autocommit=True) as conn:
+            report = run(
+                PgAIRepo(conn, tiers),
+                provider,
+                now=datetime.now(UTC),
+                since_days=args.since_days,
+                limit=args.limit,
+                daily_token_cap=cap,
+            )
+        print(json.dumps(report.as_dict()), flush=True)
+        return 1 if report.stopped == "too many consecutive provider errors" else 0
+
+    if args.every:
+        from cyberintel.loop import run_every
+
+        run_every(once, every=args.every, jitter=min(300.0, args.every / 10))
+        return 0
+    return once()
 
 
 if __name__ == "__main__":

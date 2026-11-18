@@ -10,7 +10,6 @@ The archive is private: it is read at runtime and never committed to this reposi
 from __future__ import annotations
 
 import argparse
-import os
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -29,6 +28,7 @@ def story_slug(story: Story) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     import psycopg
 
+    from cyberintel.dbconfig import database_dsn
     from cyberintel.store.repo import Store
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -38,7 +38,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for problem in loaded.problems:
         print(f"WARNING: {problem}")
     stories = link_stories(loaded.developments)
-    with psycopg.connect(os.environ.get("CIT_DATABASE_URL", ""), autocommit=True) as conn:
+    with psycopg.connect(database_dsn(), autocommit=True) as conn:
         n = Store(conn).import_archive_stories(stories)
     print(f"imported {n} stories from {len(loaded.developments)} archive developments")
     return 0

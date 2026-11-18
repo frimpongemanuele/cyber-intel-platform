@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Cyber Intelligence Platform
 
-> Status: **v0.5** (2026-11-18). Phases 6–9 built (ingestion, database, dashboard, optional AI layer); see ENGINEERING_LOG.md and AI.md.
+> Status: **v0.6** (2026-11-18). Phases 6–10 built (ingestion, database, dashboard, optional AI layer, hardened deployment); see ENGINEERING_LOG.md, AI.md and DEPLOYMENT.md.
 > Companion docs: `THREAT_MODEL.md` (security design), `SCHEMA.md` (current archive format).
 
 ## 1. Decision record (ADR-001): hybrid architecture
@@ -181,13 +181,13 @@ Collection follows the priority APIs → RSS → official feeds → structured d
 
 Before Phase 2, check the current state of the CVE/NVD ecosystem (enrichment backlog and program funding status), because it affects how much the platform can rely on NVD alone.
 
-## 7. Deployment on Proxmox
+## 7. Deployment on Proxmox (built in Phase 10; details in DEPLOYMENT.md)
 
-- One VM (Debian 12/13, 4 vCPU / 8 GB / 60 GB) on an **isolated VLAN**. Docker Compose services: `db`, `collector`, `processor`, `analyst`, `reporter`, `api`, `egress-proxy`.
-- Docker networks: `ingest_net` (collector ↔ egress-proxy only), `data_net` (workers ↔ db), `web_net` (api ↔ Tailscale sidecar). The DB is not reachable from the collector's egress path.
-- Egress through a Squid/Tinyproxy allowlist of source domains. The LLM API domain is allowed **only** for `analyst`.
-- Secrets via Docker secrets / `.env` outside the repo, never baked into images; LLM key scoped to `analyst` only.
-- Backups: nightly `pg_dump` to a Proxmox Backup Server datastore; the git archive is a second, human-readable copy.
+- One Debian 12 VM (4 vCPU / 8 GB / 60 GB) on an **isolated VLAN**, Docker Compose services: `db`, `migrate` (one-shot: migrations + grants), `ingest`, `web`, `backup`, `egress` (squid), and optional `ai` / `ollama` profiles. One application image serves migrate/ingest/web/ai.
+- Networks: `data` (internal: db and its clients), `ingest_out` / `ai_out` (internal: workers → proxy), `ollama` (internal), `egress` (proxy → internet) and `web` (published port; host rule blocks new egress). The database is never published and has no route out.
+- Egress through squid, **generated from the source registry**: CONNECT :443 to allowlisted hosts only; a separate listener lets the AI runner reach only the configured model API.
+- Least-privilege database roles per service; secrets as Docker secret files (`root:10001 0440`); remote access only via `tailscale serve` (HTTPS) to a loopback-published port.
+- Backups: nightly verified `pg_dump` with checksums and retention, plus a scripted restore check; copy dumps off-host (PBS/NAS).
 
 ## 8. Build phases (maps to the original plan)
 
@@ -198,7 +198,7 @@ Before Phase 2, check the current state of the CVE/NVD ecosystem (enrichment bac
 | 7 | Schema + Alembic migrations + enrichment | KEV/NVD/EPSS joins verified against the archive's JSON |
 | 8 | FastAPI + HTMX dashboard | Lists developments, CVE detail, filters by score/track |
 | 9 | AI layer (structured outputs, provenance) — **done** (ADR-004, AI.md) | Every summary links its input docs; injection test suite passes |
-| 10 | Compose deployment on Proxmox | Deployed and reachable only over the VPN; restore from backup tested |
+| 10 | Compose deployment on Proxmox — **done** (DEPLOYMENT.md) | Deployed and reachable only over the VPN; restore from backup tested (CI proves the stack; the VM install is the operator's step) |
 | 11 | Documentation | README, ARCHITECTURE, THREAT_MODEL, DATA_SOURCES, SCORING, DEPLOYMENT, screenshots |
 
 **MVP cut (2–3 weekends):** KEV + NVD + EPSS + ~20 RSS → Postgres → a daily Markdown report that matches the agent's brief on at least the top vulnerabilities. Everything else comes after.

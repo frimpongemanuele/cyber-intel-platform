@@ -52,7 +52,8 @@ jobs:
         # Guard against silently skipping the DB suites (e.g. a broken env var).
         run: |
           pytest -q tests/test_store_sql.py tests/test_store_db.py tests/test_read_sql.py \
-            tests/test_web_db.py tests/test_web.py -rs | tee /tmp/db.txt
+            tests/test_web_db.py tests/test_web.py tests/test_ai_db.py tests/test_grants.py \
+            tests/test_roles_e2e.py -rs | tee /tmp/db.txt
           ! grep -q "skipped" /tmp/db.txt
 
   security:

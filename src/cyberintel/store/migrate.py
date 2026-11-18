@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from cyberintel.dbconfig import database_dsn
 
 if TYPE_CHECKING:  # pragma: no cover
     import psycopg
@@ -41,6 +42,15 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at  timestamptz NOT NULL DEFAULT now()
 )
 """
+
+
+GRANTS_SQL = Path(__file__).parent / "grants.sql"
+
+
+def apply_grants(conn: psycopg.Connection[Any]) -> None:
+    """Apply ``grants.sql`` (idempotent; a no-op when the service roles do not exist)."""
+    with conn.transaction():
+        conn.execute(GRANTS_SQL.read_text(encoding="utf-8").encode())
 
 
 class MigrationError(RuntimeError):
@@ -162,13 +172,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Apply or roll back schema migrations.")
     ap.add_argument("command", choices=["up", "down", "status"])
     ap.add_argument("--to", type=int, default=0, help="target version for 'down'")
+    ap.add_argument(
+        "--grants", action="store_true", help="after 'up', apply least-privilege grants"
+    )
     args = ap.parse_args(argv)
     # Connection settings come from libpq environment variables (PGHOST, PGUSER,
     # PGDATABASE, PGPASSWORD / PGPASSFILE) or CIT_DATABASE_URL. Never from argv, where
     # passwords would leak into shell history and process listings.
-    with psycopg.connect(os.environ.get("CIT_DATABASE_URL", ""), autocommit=True) as conn:
+    with psycopg.connect(database_dsn(), autocommit=True) as conn:
         if args.command == "up":
             print("applied:", apply(conn) or "nothing pending")
+            if args.grants:
+                apply_grants(conn)
+                print("grants: applied")
         elif args.command == "down":
             print("rolled back:", rollback(conn, args.to) or "nothing to roll back")
         else:
