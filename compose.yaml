@@ -208,7 +208,7 @@ services:
   ollama:
     <<: *hardening
     profiles: [ollama]
-    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:0.40.16}
+    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592}
     read_only: false # model store and runtime files
     mem_limit: ${CIT_OLLAMA_MEM:-8g}
     pids_limit: 512
@@ -221,7 +221,7 @@ services:
   ollama-pull:
     <<: *hardening
     profiles: [ollama-pull]
-    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:0.40.16}
+    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592}
     read_only: false
     restart: "no"
     volumes: [ollama:/root/.ollama]
