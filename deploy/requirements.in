@@ -3,7 +3,7 @@
 # Keep in step with the extras in pyproject.toml ([net], [db], [web]).
 pydantic>=2.9,<3
 defusedxml>=0.7.1,<0.8
-httpx>=0.28,<0.29
+httpx>=0.28.1,<0.29
 psycopg[binary]>=3.2,<4
 starlette>=0.46,<2
 jinja2>=3.1.6,<4
