@@ -8,6 +8,7 @@ import pytest
 from cyberintel.eval.archive import (
     GoldDevelopment,
     Story,
+    entity_tokens,
     evaluate,
     idf_weights,
     link_stories,
@@ -19,7 +20,13 @@ FIX = Path(__file__).parent / "fixtures" / "archive"
 
 
 def g(
-    id_: str, day: int, title: str, cves: tuple[str, ...] = (), urgency: int = 3
+    id_: str,
+    day: int,
+    title: str,
+    cves: tuple[str, ...] = (),
+    urgency: int = 3,
+    vendors: tuple[str, ...] = (),
+    products: tuple[str, ...] = (),
 ) -> GoldDevelopment:
     return GoldDevelopment(
         id=f"2026-11-{day:02d}-{id_}",
@@ -30,6 +37,8 @@ def g(
         confidence="HIGH",
         status="CONFIRMED",
         in_kev=False,
+        vendors=vendors,
+        products=products,
     )
 
 
@@ -121,25 +130,132 @@ def test_idf_weighting() -> None:
     assert title_similarity(frozenset({"a"}), frozenset({"a"}), idf) == pytest.approx(1.0)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known limitation: a terse first report and a verbose, renamed follow-up "
-    "('Able2Shell' -> '4EverAble2Shell', no shared CVE) are not linked by title "
-    "heuristics. Needs entity matching (vendor/product) + embeddings in the Phase 7 "
-    "processor. strict=True makes this test flag when the limitation is fixed.",
-)
-def test_known_miss_renamed_verbose_followup() -> None:
-    devs = [
-        g("able2shell", 10, "N-able N-central Able2Shell: 33 alleged zero-days published"),
+def filler(n: int = 8) -> list[GoldDevelopment]:
+    return [
+        g(f"noise{i}", 2, f"unrelated item {i}", vendors=(f"Vendor{i}",), products=(f"Product{i}",))
+        for i in range(n)
+    ]
+
+
+def ncentral_case() -> list[GoldDevelopment]:
+    return [
+        *filler(),
+        g(
+            "able2shell",
+            10,
+            "N-able N-central Able2Shell: 33 alleged zero-days published",
+            vendors=("N-able",),
+            products=("N-central",),
+        ),
         g(
             "ncentral-4ever",
             17,
-            "4EverAble2Shell: unauthenticated Apache Axis chain mass-exploited within "
-            "hours of HF2; root on unnamed legacy builds; patched build effective",
+            "4EverAble2Shell: unauthenticated Apache Axis chain mass-exploited within hours of "
+            "HF2; root on unnamed legacy builds; patched build effective",
             ("CVE-2026-1", "CVE-2026-2", "CVE-2026-3", "CVE-2026-4", "CVE-2026-5"),
+            vendors=("N-able", "Apache (Axis)"),
+            products=("N-able N-central", "N-able N-central managed Windows agents"),
         ),
     ]
-    assert story_ids(link_stories(devs)) == {("able2shell", "ncentral-4ever")}
+
+
+def test_renamed_verbose_followup_links_via_entities() -> None:
+    # Formerly xfail(strict=True): the title-only linker missed this real N-central case.
+    assert ("able2shell", "ncentral-4ever") in story_ids(link_stories(ncentral_case()))
+
+
+def test_title_only_linker_still_misses_it() -> None:
+    # Documents WHY entity matching exists: titles alone are not enough.
+    assert not story_ids(link_stories(ncentral_case(), use_entities=False))
+
+
+def test_cve_veto_keeps_same_product_different_bugs_apart() -> None:
+    devs = [
+        *filler(),
+        g(
+            "chrome-a",
+            3,
+            "Chrome zero-day A",
+            ("CVE-2026-1001",),
+            vendors=("Google",),
+            products=("Chrome",),
+        ),
+        g(
+            "chrome-b",
+            10,
+            "Chrome zero-day B",
+            ("CVE-2026-2002",),
+            vendors=("Google",),
+            products=("Chrome",),
+        ),
+    ]
+    assert story_ids(link_stories(devs)) == set()
+
+
+def test_shared_package_ecosystem_is_not_identity() -> None:
+    # Real wrong merge found on the archive: two supply-chain stories sharing "npm".
+    devs = [
+        *filler(),
+        g(
+            "gha",
+            13,
+            "GitHub Actions workflow compromise",
+            vendors=("GitHub",),
+            products=("GitHub Actions", "npm", "crates.io"),
+        ),
+        g("facestealer", 14, "DPRK fake-Zoom infostealer", vendors=("Zoom", "npm", "crates.io")),
+    ]
+    assert story_ids(link_stories(devs)) == set()
+
+
+def test_common_entity_alone_does_not_link() -> None:
+    devs = [
+        *[g(f"ms{i}", 2, f"item {i}", vendors=("Microsoft",)) for i in range(8)],
+        g("x", 3, "Outlook NTLM leak", vendors=("Microsoft",), products=("Outlook",)),
+        g("y", 5, "Teams vishing", vendors=("Microsoft",), products=("Teams",)),
+    ]
+    assert not any({"x", "y"} <= set(s) for s in story_ids(link_stories(devs)))
+
+
+@pytest.mark.parametrize(
+    ("cves", "vendors", "products", "bundle"),
+    [
+        (5, (), (), True),  # no entity data: conservative CVE-count fallback
+        (4, ("A", "B", "C"), (), False),  # few CVEs: never a bundle
+        (8, ("N-able",), ("N-central",), False),  # one product's hotfix set
+        (5, ("N-able", "Apache (Axis)"), ("N-central", "agents"), False),  # + a component
+        (12, ("Citrix",), ("ADC", "Gateway", "SDX", "VPX"), False),  # one advisory
+        (7, ("Microsoft",), ("Exchange", "SharePoint", "Windows", "Office", "Edge"), True),
+        (10, ("Zenitel", "D-Link", "TRENDnet"), (), True),  # multi-vendor cluster
+    ],
+)
+def test_bundle_definition(
+    cves: int, vendors: tuple[str, ...], products: tuple[str, ...], bundle: bool
+) -> None:
+    d = g(
+        "x",
+        1,
+        "x",
+        tuple(f"CVE-2026-{1000 + i}" for i in range(cves)),
+        vendors=vendors,
+        products=products,
+    )
+    assert d.is_bundle is bundle
+
+
+@pytest.mark.parametrize(
+    ("names", "expected"),
+    [
+        (("N-central",), {"ncentral", "central"}),
+        (("N-able N-central",), {"nable", "able", "ncentral", "central"}),
+        (("GS1900-8HP",), {"gs19008hp", "gs1900", "8hp"}),
+        (("GS1900 series switches",), {"gs1900"}),
+        (("npm", "PyPI", "crates.io"), set()),
+        (("N/A (offensive framework)",), {"offensive"}),
+    ],
+)
+def test_entity_tokens(names: tuple[str, ...], expected: set[str]) -> None:
+    assert entity_tokens(names) == expected
 
 
 # --------------------------------------------------------------------- evaluation
@@ -163,8 +279,25 @@ def test_evaluate_recall_lookback_and_unevaluable() -> None:
 
 def test_evaluate_respects_k_and_empty_inputs() -> None:
     gold = [g("x", 1, "x", ("CVE-2026-1",), urgency=5)]
-    ranked = {date(2026, 11, 1): [frozenset({f"CVE-2026-{n}"}) for n in range(2, 12)]
-              + [frozenset({"CVE-2026-1"})]}  # fmt: skip
+    ranked = {
+        date(2026, 11, 1): [frozenset({f"CVE-2026-{n}"}) for n in range(2, 12)]
+        + [frozenset({"CVE-2026-1"})]
+    }
     assert evaluate(gold, ranked, k=10).hits == 0  # it's at position 11
     assert evaluate(gold, ranked, k=11).hits == 1
     assert evaluate([], {}).recall == 0.0
+
+
+def test_rarity_blocks_perfect_overlap_on_a_common_entity() -> None:
+    # Two entries that list ONLY "Microsoft" overlap perfectly (1.0); only the rarity
+    # rule stops every vendor-only Microsoft item from merging into one story.
+    # Fillers make "microsoft" common (df > ENTITY_MAX_DF) but sit > 14 days away, so no
+    # roll-up/bridge logic can mask the result: only the rarity rule decides.
+    devs = [
+        *[g(f"ms{i}", 25 + i // 2, f"item {i}", vendors=("Microsoft",)) for i in range(8)],
+        g("x", 3, "Exchange issue", vendors=("Microsoft",)),
+        g("y", 5, "Defender bypass", vendors=("Microsoft",)),
+    ]
+    stories = link_stories(devs)
+    assert not any({"x", "y"} <= set(s) for s in story_ids(stories))
+    assert not any(s.is_rollup for s in stories if s.members[0].id.endswith(("-x", "-y")))

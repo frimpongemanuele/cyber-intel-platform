@@ -4,6 +4,37 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Phase 7: database, story identity, ingest runner
+
+### SQL-first, tested against real PostgreSQL without a Python driver
+The build environment had a PostgreSQL 16 server but no Python driver and no package access. Rather than write untested ORM code, the design became SQL-first (ADR-002): the schema and every statement are plain SQL, and a small harness runs the *exact production text* through `psql` (`%(x)s` → `:'x'`, which psql quotes correctly). Production executes the same strings via psycopg; CI runs both layers against a PostgreSQL service.
+
+### Integrity rules live in the database
+- Constraints as a security layer: `DOMAIN`s for CVE IDs, source names and http(s) URLs; `CHECK`s on score ranges, enums and text lengths; headline fields must be all-or-nothing.
+- Facts never move backwards: an older CVE.org record, NVD page or EPSS snapshot is ignored (`WHERE EXCLUDED.x >= existing.x`).
+- No mass deletion from a broken feed: KEV removals are recorded (never deleted), only from a cleanly parsed catalog, and the SQL itself refuses unless the new catalog has ≥ 90% of active entries.
+- Source ownership: CVE.org owns record text; NVD only fills gaps; CWEs are the union of both.
+- **Mutation testing** removed each rule in turn. 5/6 were caught; the survivor (NVD overwriting the CNA description) exposed that no test put the same CVE through both sources. Test added.
+
+### Migration runner with tamper detection
+Applied migrations are recorded with a SHA-256; a modified applied file, a version gap, or a database ahead of the code all stop the run. An advisory lock serializes concurrent deployers (tested with 4 threads: each migration applied exactly once).
+
+### Story identity: entity linking, built from the archive's evidence
+The title-only linker missed N-central (a 4-day story) and ARTEX. Adding vendor/product matching surfaced two traps, both resolved from the real data rather than by threshold tuning:
+1. **Same product, different bug.** Entity overlap alone would merge two Chrome zero-days. Fix: a **CVE-disagreement veto**: two focused developments with disjoint CVE sets are different stories.
+2. **"Bundle" was mis-defined.** More than 4 CVEs ⇒ roll-up excluded N-central's hotfix sets. Inspecting every multi-CVE entry showed the real split: roll-ups span **≥ 3 vendors or ≥ 5 products** (Patch Tuesday, monthly PSIRT, multi-vendor IoT cluster); one product's 8 CVEs or one Citrix advisory's 12 are focused stories.
+
+The first entity version also produced a new wrong merge (GitHub Actions compromise ↔ DPRK fake-Zoom infostealer) through shared `npm`/`crates.io`: package ecosystems are infrastructure, not identity. They are now non-identifying tokens.
+
+Result on the archive: 8 multi-day stories, 0 wrong merges, stable across thresholds 0.3–0.5. N-central links across all four days. The former `xfail(strict=True)` started passing and was promoted to a regular test. ARTEX remains isolated: "AntiFox (ARTEX successor)" matches equally well, so the conservative roll-up outcome is accepted and documented.
+
+A mutation of the rarity rule initially *survived* because a test's filler items sat within the 14-day window, so the bridge/roll-up rule masked the result. The fillers were moved outside the window so only the rule under test decides.
+
+### Ingest runner
+Expected source failures are recorded (`fetch_runs`, `source_state`) and the run continues; anything else propagates. Failing sources back off exponentially (×2 per failure, capped at ×64). NVD windows start from the last success minus one hour of overlap. An enrichment queue fetches CVE.org records for CVEs in KEV or named in collected articles. Queue values come from untrusted text, so a poisoned entry fails the job through the CVE-ID validator and never becomes a URL.
+
+---
+
 ## 2026-11-18 — Phase 6b: network layer and collectors
 
 ### Source verification changed the design

@@ -2,7 +2,7 @@
 
 A self-hosted cyber threat-intelligence platform for one analyst's homelab. It collects vulnerability and threat data from authoritative sources, enriches and de-duplicates it, and produces a daily briefing. An AI layer explains and connects the data but is **never the source of truth**.
 
-> **Status: Phase 6 (ingestion) complete.** Hardened fetcher, collectors for KEV, EPSS, NVD, CVE.org and RSS/Atom, with weekly live verification of every source. Database (Phase 7) is next. See the [roadmap](#roadmap).
+> **Status: Phases 6–7 complete.** Hardened ingestion with weekly live verification of every source; PostgreSQL store whose constraints and integrity rules are enforced in SQL; cross-day story identity; an ingest runner with backoff and an audit trail. Dashboard (Phase 8) is next. See the [roadmap](#roadmap).
 
 ## Why it exists
 
@@ -15,7 +15,7 @@ It started as a scheduled AI research agent that writes a daily intel brief into
 3. **Fail closed.** When a check is unsure (an ambiguous URL, an odd XML construct, a malformed row), the answer is no.
 4. **Every protection has a test that would fail without it.** Verified by mutation testing, not assumed.
 
-## What's built (Phase 6)
+## What's built
 
 | Module | Purpose | Threat model |
 |---|---|---|
@@ -29,18 +29,27 @@ It started as a scheduled AI research agent that writes a daily intel brief into
 | `net/ratelimit.py`, `net/decompress.py` | Per-host pacing (provably within NVD's 5/30 s); bounded gunzip (decompression-bomb defence) | T3 |
 | `collectors/nvd.py`, `cve5.py`, `cvss.py` | NVD 2.0 + CVE.org 5.x parsers; **CVSS with provenance** (NVD/CNA/ADP) and an explicit headline policy; CISA-ADP SSVC | T10 |
 | `collectors/run.py`, `sources.py` | Collector jobs over a `Fetcher` protocol; validated source registry that **generates the SSRF allowlist** | T1 |
-| `eval/archive.py` | Loads the agent's archive as gold data; links the same story across days; computes recall@k for the pipeline | — |
+| `store/migrations/`, `store/sql.py` | SQL-first schema + statements: constraints as a security layer; facts never move backwards; KEV anti-wipe guard; source ownership rules | T10 |
+| `store/migrate.py` | Migration runner: SHA-256 tamper/drift detection, advisory lock for concurrent deployers | T15 |
+| `store/repo.py`, `store/rows.py` | Transactional repository; pure row mappers; batches as one `jsonb` parameter | T10, T14 |
+| `ingest.py` | Runner: due/backoff scheduling, incremental NVD windows, CVE.org enrichment queue, `fetch_runs` audit trail | T1, T4 |
+| `eval/archive.py` | Loads the agent's archive as gold data; links stories across days by CVE, title and **rarity-weighted vendor/product entities**, with a CVE-disagreement veto and roll-up isolation; recall@k | — |
 
-**Test suite:** ~210 offline tests + 1 documented known limitation (`xfail(strict=True)`), plus a weekly live-source job. `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
+**Test suite:** ~250 offline tests, ~40 PostgreSQL tests (SQL via psql + repository via psycopg, in CI against a PostgreSQL 16 service), and a weekly live-source job. Integrity rules are verified by mutation testing. `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
 
 ## Run it
 
 ```bash
-python -m pip install -e ".[dev]"
-pytest                 # all tests use local fixtures; no network
-ruff check . && mypy
-# Summarize a local clone of the (private) intel archive as a test set:
-python -m cyberintel.eval.archive /path/to/cyber-intel-archive
+python -m pip install -e ".[dev,net,db]"
+pytest                                   # offline unit tests (fixtures; no network)
+CIT_TEST_PG=1 PGHOST=... PGUSER=... pytest  # + PostgreSQL tests
+
+# Connection settings come from libpq env vars (PGHOST, PGUSER, PGDATABASE, PGPASSFILE)
+# or CIT_DATABASE_URL, never from command-line arguments.
+python -m cyberintel.store.migrate up    # apply schema (checksum-verified)
+python -m cyberintel.ingest              # run every due source once (cron/systemd timer)
+python -m cyberintel.store.archive_import /path/to/cyber-intel-archive
+python -m cyberintel.eval.archive /path/to/cyber-intel-archive   # story-linking report
 ```
 
 ## Roadmap
@@ -51,8 +60,8 @@ python -m cyberintel.eval.archive /path/to/cyber-intel-archive
 | 5 | Architecture + threat model | ✅ draft accepted |
 | 6 | Ingestion: pure core | ✅ |
 | 6b | Network layer + collectors + live source verification | ✅ |
-| 7 | **next:** PostgreSQL + Alembic; enrichment joins; persistent cross-day developments; entity + embedding linking | |
-| 8 | FastAPI + HTMX dashboard | |
+| 7 | PostgreSQL (SQL-first), integrity rules in SQL, story identity with entity linking, ingest runner | ✅ |
+| 8 | **next:** FastAPI + HTMX dashboard | |
 | 9 | AI layer: structured outputs, provenance, prompt-injection test corpus | |
 | 10 | Hardened Docker Compose on Proxmox, VPN-only access | |
 | 11 | Docs: DATA_SOURCES, SCORING, DEPLOYMENT, screenshots | |
