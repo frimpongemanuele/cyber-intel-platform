@@ -1,0 +1,53 @@
+[project]
+name = "cyberintel"
+version = "0.1.0"
+description = "Self-hosted cyber threat intelligence platform: deterministic ingestion + enrichment, with a separate, source-linked AI analysis layer."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+# Core is deliberately small: pure parsing/validation logic only.
+dependencies = [
+    "pydantic>=2.9,<3",
+    "defusedxml>=0.7.1,<0.8",
+]
+
+[project.optional-dependencies]
+# Network + persistence layers (Phase 6b / 7). Kept optional so the security-critical
+# core stays installable and testable with a minimal dependency surface.
+net = ["httpx>=0.28,<0.29"]
+db = ["sqlalchemy>=2.0,<2.1", "psycopg[binary]>=3.2,<3.3", "alembic>=1.14,<1.15"]
+dev = ["pytest>=8", "ruff>=0.8", "mypy>=1.13"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = ["network: test needs live internet (skipped by default; run in CI with -m network)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101"]  # assert is fine in tests
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S104", "S105", "S106"]  # test data, not real binds/secrets
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "src"
+packages = ["cyberintel"]
+
+[[tool.mypy.overrides]]
+module = ["defusedxml.*"]
+ignore_missing_imports = true

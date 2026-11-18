@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="text">Example CERT Advisories</title>
+  <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+  <updated>2026-11-09T10:00:00Z</updated>
+  <entry>
+    <title>Advisory: GPUStack loopback trust (CVE-2026-102895)</title>
+    <link rel="enclosure" href="https://cert.example.org/a/1.pdf"/>
+    <link rel="alternate" href="https://cert.example.org/advisories/1"/>
+    <id>tag:cert.example.org,2026:adv-1</id>
+    <published>2026-11-09T09:15:00+01:00</published>
+    <updated>2026-11-09T11:00:00Z</updated>
+    <summary type="html">&lt;p&gt;Requests appearing to come from loopback were trusted.&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Entry with only updated date and data: link</title>
+    <link href="data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;"/>
+    <id>tag:cert.example.org,2026:adv-2</id>
+    <updated>2026-11-10T08:00:00Z</updated>
+    <content type="text">Body text.</content>
+  </entry>
+</feed>

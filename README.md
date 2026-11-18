@@ -1,0 +1,64 @@
+# cyber-intel-platform
+
+A self-hosted cyber threat-intelligence platform for one analyst's homelab. It collects vulnerability and threat data from authoritative sources, enriches and de-duplicates it, and produces a daily briefing. An AI layer explains and connects the data but is **never the source of truth**.
+
+> **Status: Phase 6, ingestion MVP in progress.** The security-critical, pure-logic core is built and tested. The network fetcher, database and UI come next. See the [roadmap](#roadmap).
+
+## Why it exists
+
+It started as a scheduled AI research agent that writes a daily intel brief into a private archive. That works, but it is non-deterministic, it owns none of its data, and an LLM is a poor source of record for facts like "is this CVE in CISA KEV?". This platform moves the *facts* into a deterministic, testable pipeline and leaves the AI to do what it is good at: summarizing, connecting stories and explaining. The agent's archive becomes this project's **labelled test set**. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), ADR-001.
+
+## Design principles
+
+1. **Everything collected from the internet is hostile input.** The system's job is to ingest attacker-controllable content, so it is threat-modelled as such: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+2. **Facts, raw evidence and AI interpretation live in separate layers.** CVSS, KEV and EPSS come only from authoritative APIs; AI output is stored separately with links to the exact inputs it saw.
+3. **Fail closed.** When a check is unsure (an ambiguous URL, an odd XML construct, a malformed row), the answer is no.
+4. **Every protection has a test that would fail without it.** Verified by mutation testing, not assumed.
+
+## What's built (Phase 6, slice 1)
+
+| Module | Purpose | Threat model |
+|---|---|---|
+| `security/url_guard.py` | SSRF guard: host allowlist; IP-literal rejection in every encoding (decimal, octal, hex, IPv6, mapped); requires *all* resolved addresses to be public; returns pinned addresses to defeat DNS rebinding; re-validates every redirect | T1 |
+| `parsing/feeds.py` | RSS/Atom via `defusedxml` with DTDs, entities and external references forbidden; size, item and field caps; drops `javascript:`/`data:` links | T2, T3 |
+| `parsing/html_text.py` | Untrusted HTML → plain text (scripts, styles and SVG dropped) for excerpts and LLM input | T9 |
+| `collectors/kev.py` | CISA KEV parser. Validates row by row: one bad record is quarantined, not fatal; flags count mismatches | T4, T10 |
+| `collectors/epss.py` | FIRST EPSS CSV parser (streaming, range-validated) | T10 |
+| `normalize.py` | CVE extraction (handles Unicode dashes), canonical URLs for exact de-duplication | — |
+| `eval/archive.py` | Loads the agent's archive as gold data; links the same story across days; computes recall@k for the pipeline | — |
+
+**Test suite:** 121 tests + 1 documented known limitation (`xfail(strict=True)`). `mypy --strict` and `ruff` clean. Hostile fixtures include XXE file/SSRF reads, billion-laughs, external DTDs, SSRF via DNS records pointing at metadata/loopback/CGNAT/NAT64, redirect downgrades and URL-parser confusion.
+
+## Run it
+
+```bash
+python -m pip install -e ".[dev]"
+pytest                 # all tests use local fixtures; no network
+ruff check . && mypy
+# Summarize a local clone of the (private) intel archive as a test set:
+python -m cyberintel.eval.archive /path/to/cyber-intel-archive
+```
+
+## Roadmap
+
+| Phase | Deliverable | Status |
+|---|---|---|
+| 1–4 | Scheduled research agent, sources, scoring, report formats | ✅ running daily |
+| 5 | Architecture + threat model | ✅ draft accepted |
+| 6 | Ingestion: pure core | ✅ this slice |
+| 6b | Network layer: pinned-IP `httpx` transport, conditional GET, rate limits, fetcher tests | next |
+| 7 | PostgreSQL + Alembic; enrichment joins; persistent cross-day developments; entity + embedding linking | |
+| 8 | FastAPI + HTMX dashboard | |
+| 9 | AI layer: structured outputs, provenance, prompt-injection test corpus | |
+| 10 | Hardened Docker Compose on Proxmox, VPN-only access | |
+| 11 | Docs: DATA_SOURCES, SCORING, DEPLOYMENT, screenshots | |
+
+## Docs
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): decision record, pipeline, data model, deployment
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): trust boundaries, STRIDE, mitigations, verification
+- [`docs/ENGINEERING_LOG.md`](docs/ENGINEERING_LOG.md): decisions and findings, including the ones that didn't work
+
+## License
+
+MIT

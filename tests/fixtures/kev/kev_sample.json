@@ -1,0 +1,33 @@
+{
+  "title": "CISA Catalog of Known Exploited Vulnerabilities (synthetic test fixture, real field layout)",
+  "catalogVersion": "2026.11.09",
+  "dateReleased": "2026-11-09T17:02:11.0000Z",
+  "count": 7,
+  "vulnerabilities": [
+    {"cveID": "CVE-2026-123158", "vendorProject": "OpenBSD", "product": "OpenSSH",
+     "vulnerabilityName": "OpenBSD OpenSSH Unexpected Status Code or Return Value Vulnerability",
+     "dateAdded": "2026-11-09", "shortDescription": "Authentication bypass on musl-based Linux without PAM.",
+     "requiredAction": "Apply mitigations per vendor instructions.", "dueDate": "2026-11-30",
+     "knownRansomwareCampaignUse": "Unknown", "notes": "https://www.openssh.com/releasenotes.html", "cwes": ["CWE-394"]},
+    {"cveID": "cve-2026-102895", "vendorProject": "GPUStack", "product": "GPUStack",
+     "vulnerabilityName": "GPUStack Improper Authentication Vulnerability",
+     "dateAdded": "2026-11-09", "shortDescription": "Loopback requests treated as trusted.",
+     "requiredAction": "Upgrade to 2.2.0 or later.", "dueDate": "2026-11-30",
+     "knownRansomwareCampaignUse": "Known", "notes": "", "cwes": ["CWE-287", "CWE-290", "bogus-cwe"]},
+    {"cveID": "CVE-2026-116779", "vendorProject": "SignalWire", "product": "FreeSWITCH",
+     "vulnerabilityName": "SignalWire FreeSWITCH Code Injection Vulnerability",
+     "dateAdded": "2026-11-09", "shortDescription": "Code injection.", "requiredAction": "Patch.",
+     "dueDate": "", "knownRansomwareCampaignUse": "Unknown", "notes": null, "cwes": null},
+    {"cveID": "NOT-A-CVE", "vendorProject": "X", "product": "Y", "vulnerabilityName": "bad id",
+     "dateAdded": "2026-11-09", "shortDescription": "", "requiredAction": "", "dueDate": "2026-11-30",
+     "knownRansomwareCampaignUse": "Unknown"},
+    {"cveID": "CVE-2026-123218", "vendorProject": "IBM", "product": "Aspera Faspex",
+     "vulnerabilityName": "IBM Aspera Faspex Incorrect Authorization Vulnerability",
+     "shortDescription": "missing dateAdded", "requiredAction": "Patch.", "dueDate": "2026-11-30",
+     "knownRansomwareCampaignUse": "Unknown"},
+    {"cveID": "CVE-2026-123158", "vendorProject": "OpenBSD", "product": "OpenSSH",
+     "vulnerabilityName": "duplicate row", "dateAdded": "2026-11-09", "shortDescription": "",
+     "requiredAction": "", "dueDate": "2026-11-30", "knownRansomwareCampaignUse": "Unknown"},
+    "this row is a string, not an object"
+  ]
+}

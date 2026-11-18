@@ -1,0 +1,25 @@
+{
+ "report_date": "2026-11-30",
+ "schema_version": "0.1",
+ "developments": [
+  {
+   "id": "2026-11-30-acme-vpn-anniversary",
+   "title": "AcmeVPN auth bypass exploited",
+   "cves": [
+    "CVE-2026-10001"
+   ],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 2
+   }
+  }
+ ]
+}

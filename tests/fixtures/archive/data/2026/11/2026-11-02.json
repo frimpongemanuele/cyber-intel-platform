@@ -1,0 +1,85 @@
+{
+ "report_date": "2026-11-02",
+ "schema_version": "0.1",
+ "developments": [
+  {
+   "id": "2026-11-02-acme-vpn-mass-exploitation",
+   "title": "AcmeVPN mass exploitation follow-up",
+   "cves": [
+    "CVE-2026-10001"
+   ],
+   "in_kev": true,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 5
+   }
+  },
+  {
+   "id": "2026-11-02-quokka-ransomware-decryptor",
+   "title": "Quokka ransomware decryptor released",
+   "cves": [],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 3
+   }
+  },
+  {
+   "id": "2026-11-02-kev-carryover",
+   "title": "KEV carry-over: WidgetDB and Zebra due today",
+   "cves": [
+    "CVE-2026-20002",
+    "CVE-2026-30003"
+   ],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 3
+   }
+  },
+  {
+   "id": "2026-11-02-patch-day-bundle",
+   "title": "Patch day bundle",
+   "cves": [
+    "CVE-2026-50001",
+    "CVE-2026-60001",
+    "CVE-2026-60002",
+    "CVE-2026-60003",
+    "CVE-2026-60004"
+   ],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 3
+   }
+  }
+ ]
+}

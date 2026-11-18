@@ -1,0 +1,44 @@
+{
+ "report_date": "2026-11-03",
+ "schema_version": "0.1",
+ "developments": [
+  {
+   "id": "2026-11-03-zebra-router-rce",
+   "title": "Zebra router RCE",
+   "cves": [
+    "CVE-2026-30003"
+   ],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 4
+   }
+  },
+  {
+   "id": "2026-11-03-widgetdb-sqli-patch",
+   "title": "WidgetDB SQL injection patched",
+   "cves": [
+    "CVE-2026-20002"
+   ],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 3
+   }
+  }
+ ]
+}

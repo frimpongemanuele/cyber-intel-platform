@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Example Research Blog</title>
+    <link>https://research.example.org/</link>
+    <item>
+      <title>Auth bypass in ExampleSSH &amp; friends (CVE-2026-123158)</title>
+      <link>https://research.example.org/posts/sshole?utm_source=rss</link>
+      <guid isPermaLink="false">post-1001</guid>
+      <pubDate>Thu, 05 Nov 2026 14:30:00 +0100</pubDate>
+      <description><![CDATA[<p>Fail-open <b>error handling</b> lets an oversized input match a disabled sentinel.</p><script>alert(document.cookie)</script><style>p{}</style>]]></description>
+    </item>
+    <item>
+      <title>Hostile link item</title>
+      <link>javascript:alert(1)</link>
+      <guid>post-1002</guid>
+      <pubDate>not a date</pubDate>
+      <description>Plain text body.</description>
+    </item>
+    <item>
+      <title>content:encoded wins over description</title>
+      <link>https://research.example.org/posts/3</link>
+      <description>short</description>
+      <content:encoded><![CDATA[<div>Full <i>body</i> text.</div>]]></content:encoded>
+    </item>
+  </channel>
+</rss>

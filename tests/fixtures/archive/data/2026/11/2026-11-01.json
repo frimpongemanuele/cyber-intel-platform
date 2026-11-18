@@ -1,0 +1,84 @@
+{
+ "report_date": "2026-11-01",
+ "schema_version": "0.1",
+ "developments": [
+  {
+   "id": "2026-11-01-acme-vpn-authbypass",
+   "title": "AcmeVPN auth bypass exploited",
+   "cves": [
+    "CVE-2026-10001"
+   ],
+   "in_kev": true,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 5
+   }
+  },
+  {
+   "id": "2026-11-01-widgetdb-sqli",
+   "title": "WidgetDB SQL injection in admin API",
+   "cves": [
+    "CVE-2026-20002"
+   ],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 4
+   }
+  },
+  {
+   "id": "2026-11-01-quokka-ransomware",
+   "title": "Quokka ransomware targets hospitals",
+   "cves": [],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 4
+   }
+  },
+  {
+   "id": "2026-11-01-vendor-rollup",
+   "title": "Vendor monthly advisory roll-up",
+   "cves": [
+    "CVE-2026-50001",
+    "CVE-2026-50002",
+    "CVE-2026-50003",
+    "CVE-2026-50004",
+    "CVE-2026-50005"
+   ],
+   "in_kev": false,
+   "confidence": "HIGH",
+   "status": "CONFIRMED",
+   "scores": {
+    "technical_impact": 3,
+    "real_world": 3,
+    "offensive": 3,
+    "defensive": 3,
+    "learning": 3,
+    "portfolio": 3,
+    "urgency": 2
+   }
+  }
+ ]
+}
