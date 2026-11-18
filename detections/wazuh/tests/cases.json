@@ -1,0 +1,333 @@
+[
+ {
+  "name": "failed login alerts at level 5",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.login_failed\",\"severity\":\"medium\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100101"
+ },
+ {
+  "name": "5 failures in 5 minutes = brute force",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.login_failed\",\"severity\":\"medium\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json",
+    "repeat": 6
+   }
+  ],
+  "seen": [
+   "100102"
+  ]
+ },
+ {
+  "name": "4 failures are not yet brute force",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.login_failed\",\"severity\":\"medium\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json",
+    "repeat": 4
+   }
+  ],
+  "not_seen": [
+   "100102"
+  ]
+ },
+ {
+  "name": "throttled login",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.login_throttled\",\"severity\":\"high\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100103"
+ },
+ {
+  "name": "normal login is low severity",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.login_succeeded\",\"severity\":\"low\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100104"
+ },
+ {
+  "name": "success after brute force = likely compromise",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.login_failed\",\"severity\":\"medium\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json",
+    "repeat": 6
+   },
+   {
+    "event": "{\"cit_event\":\"auth.login_succeeded\",\"severity\":\"low\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100105"
+ },
+ {
+  "name": "success after a single typo is not escalated",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.login_failed\",\"severity\":\"medium\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   },
+   {
+    "event": "{\"cit_event\":\"auth.login_succeeded\",\"severity\":\"low\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100104"
+ },
+ {
+  "name": "forged session cookie",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"auth.session_rejected\",\"severity\":\"medium\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\",\"path\":\"/vulns\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100106"
+ },
+ {
+  "name": "cross-site POST",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"web.csrf_refused\",\"severity\":\"medium\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"client\":\"10.0.2.2\",\"path\":\"/login\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100107"
+ },
+ {
+  "name": "single bad Host header is low",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"web.host_rejected\",\"severity\":\"low\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"host\":\"rebind.attacker.example\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100108"
+ },
+ {
+  "name": "Host header burst = scan / rebinding",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"web.host_rejected\",\"severity\":\"low\",\"service\":\"web\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"host\":\"rebind.attacker.example\",\"client\":\"10.0.2.2\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json",
+    "repeat": 25
+   }
+  ],
+  "seen": [
+   "100109"
+  ]
+ },
+ {
+  "name": "SSRF refusal",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"fetch.url_rejected\",\"severity\":\"high\",\"service\":\"ingest\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"source\":\"research-feed\",\"reason\":\"redirect to http://169.254.169.254/ refused\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100110"
+ },
+ {
+  "name": "source failure",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"source.failed\",\"severity\":\"low\",\"service\":\"ingest\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"source\":\"cisa-advisories\",\"error_type\":\"FetchHTTPError\",\"http_status\":403}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100111"
+ },
+ {
+  "name": "quarantined feed records",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"feed.records_quarantined\",\"severity\":\"medium\",\"service\":\"ingest\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"source\":\"cisa-kev\",\"count\":4}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100112"
+ },
+ {
+  "name": "AI output rejected",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"ai.output_rejected\",\"severity\":\"medium\",\"service\":\"ai\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"story\":\"example\",\"provider\":\"ollama\",\"model\":\"m\",\"reasons\":[\"cited URL is not an input evidence URL\"]}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100113"
+ },
+ {
+  "name": "AI injection suspected",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"ai.injection_suspected\",\"severity\":\"medium\",\"service\":\"ai\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"story\":\"example\",\"provider\":\"ollama\"}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100114"
+ },
+ {
+  "name": "AI degraded",
+  "events": [
+   {
+    "event": "{\"cit_event\":\"ai.token_cap_reached\",\"severity\":\"low\",\"service\":\"ai\",\"ts\":\"2026-11-18T19:39:45.600Z\",\"provider\":\"anthropic\",\"cap\":200000}",
+    "log_format": "json",
+    "location": "/srv/cit/logs/web/security.json"
+   }
+  ],
+  "last": "100115"
+ },
+ {
+  "name": "egress proxy denied a destination",
+  "events": [
+   {
+    "event": "{\"log\":\"1795030908.123      0 172.30.1.5 TCP_DENIED/403 3920 CONNECT example.com:443 - HIER_NONE/- text/html\\n\",\"stream\":\"stdout\",\"attrs\":{\"CIT_SERVICE\":\"egress\"},\"time\":\"2026-11-18T19:41:48.377Z\"}",
+    "log_format": "json",
+    "location": "/var/lib/docker/containers/abc/abc-json.log"
+   }
+  ],
+  "last": "100131"
+ },
+ {
+  "name": "allowed proxy tunnel is not an alert",
+  "events": [
+   {
+    "event": "{\"log\":\"1795030908.123  52100 172.30.1.5 TCP_TUNNEL/200 48213 CONNECT www.cisa.gov:443 - HIER_DIRECT/104.94.1.1 -\\n\",\"stream\":\"stdout\",\"attrs\":{\"CIT_SERVICE\":\"egress\"},\"time\":\"2026-11-18T19:41:48.377Z\"}",
+    "log_format": "json",
+    "location": "/var/lib/docker/containers/abc/abc-json.log"
+   }
+  ],
+  "last": null
+ },
+ {
+  "name": "database password failure",
+  "events": [
+   {
+    "event": "{\"log\":\"2026-11-18 19:41:48.377 UTC [123] FATAL:  password authentication failed for user \\\"cit_web\\\"\\n\",\"stream\":\"stderr\",\"attrs\":{\"CIT_SERVICE\":\"db\"},\"time\":\"2026-11-18T19:41:48.377Z\"}",
+    "log_format": "json",
+    "location": "/var/lib/docker/containers/abc/abc-json.log"
+   }
+  ],
+  "last": "100132"
+ },
+ {
+  "name": "repeated database password failures",
+  "events": [
+   {
+    "event": "{\"log\":\"2026-11-18 19:41:48.377 UTC [123] FATAL:  password authentication failed for user \\\"cit_web\\\"\\n\",\"stream\":\"stderr\",\"attrs\":{\"CIT_SERVICE\":\"db\"},\"time\":\"2026-11-18T19:41:48.377Z\"}",
+    "log_format": "json",
+    "location": "/var/lib/docker/containers/abc/abc-json.log",
+    "repeat": 6
+   }
+  ],
+  "seen": [
+   "100133"
+  ]
+ },
+ {
+  "name": "ordinary container output is silent",
+  "events": [
+   {
+    "event": "{\"log\":\"INFO:     127.0.0.1:38352 - \\\"GET /healthz HTTP/1.1\\\" 200 OK\\n\",\"stream\":\"stderr\",\"attrs\":{\"CIT_SERVICE\":\"web\"},\"time\":\"2026-11-18T19:41:48.377Z\"}",
+    "log_format": "json",
+    "location": "/var/lib/docker/containers/abc/abc-json.log"
+   }
+  ],
+  "last": null
+ },
+ {
+  "name": "web container outbound attempt (kernel log)",
+  "events": [
+   {
+    "event": "Nov 18 19:55:01 siemelog kernel: [12345.678901] CIT-WEB-EGRESS IN=br-3f2a OUT=enp0s3 MAC=02:42:ac:1f:fa:02 SRC=172.31.250.2 DST=1.1.1.1 LEN=60 TOS=0x00 PREC=0x00 TTL=63 ID=4242 DF PROTO=TCP SPT=40000 DPT=443 WINDOW=64240 RES=0x00 SYN URGP=0",
+    "log_format": "syslog",
+    "location": "journald"
+   }
+  ],
+  "last": "100140"
+ },
+ {
+  "name": "db health check exec is silenced",
+  "events": [
+   {
+    "event": "{\"integration\":\"docker\",\"docker\":{\"Type\":\"container\",\"Action\":\"exec_start: pg_isready -h /var/run/postgresql -U postgres -d cit\",\"Actor\":{\"ID\":\"7d0c86\",\"Attributes\":{\"com\":{\"docker\":{\"compose\":{\"project\":\"cit\",\"service\":\"db\"}}},\"image\":\"cyber-intel-platform:local\",\"name\":\"cit-db-1\"}},\"scope\":\"local\",\"time\":\"1795030908\"}}",
+    "log_format": "json",
+    "location": "Wazuh-Docker"
+   }
+  ],
+  "last": null
+ },
+ {
+  "name": "web health check exec is silenced",
+  "events": [
+   {
+    "event": "{\"integration\":\"docker\",\"docker\":{\"Type\":\"container\",\"Action\":\"exec_start: python -m cyberintel.web.healthcheck\",\"Actor\":{\"ID\":\"7d0c86\",\"Attributes\":{\"com\":{\"docker\":{\"compose\":{\"project\":\"cit\",\"service\":\"web\"}}},\"image\":\"cyber-intel-platform:local\",\"name\":\"cit-web-1\"}},\"scope\":\"local\",\"time\":\"1795030908\"}}",
+    "log_format": "json",
+    "location": "Wazuh-Docker"
+   }
+  ],
+  "last": null
+ },
+ {
+  "name": "egress health check exec is silenced",
+  "events": [
+   {
+    "event": "{\"integration\":\"docker\",\"docker\":{\"Type\":\"container\",\"Action\":\"exec_start: bash -c exec 3<>/dev/tcp/127.0.0.1/3128\",\"Actor\":{\"ID\":\"7d0c86\",\"Attributes\":{\"com\":{\"docker\":{\"compose\":{\"project\":\"cit\",\"service\":\"egress\"}}},\"image\":\"cyber-intel-platform:local\",\"name\":\"cit-egress-1\"}},\"scope\":\"local\",\"time\":\"1795030908\"}}",
+    "log_format": "json",
+    "location": "Wazuh-Docker"
+   }
+  ],
+  "last": null
+ },
+ {
+  "name": "shell inside the web container",
+  "events": [
+   {
+    "event": "{\"integration\":\"docker\",\"docker\":{\"Type\":\"container\",\"Action\":\"exec_start: sh\",\"Actor\":{\"ID\":\"7d0c86\",\"Attributes\":{\"com\":{\"docker\":{\"compose\":{\"project\":\"cit\",\"service\":\"web\"}}},\"image\":\"cyber-intel-platform:local\",\"name\":\"cit-web-1\"}},\"scope\":\"local\",\"time\":\"1795030908\"}}",
+    "log_format": "json",
+    "location": "Wazuh-Docker"
+   }
+  ],
+  "last": "100151"
+ },
+ {
+  "name": "look-alike of a health check is not silenced",
+  "events": [
+   {
+    "event": "{\"integration\":\"docker\",\"docker\":{\"Type\":\"container\",\"Action\":\"exec_start: pg_isready -h /var/run/postgresql -U postgres -d cit; cat /run/secrets/pg_owner_password\",\"Actor\":{\"ID\":\"7d0c86\",\"Attributes\":{\"com\":{\"docker\":{\"compose\":{\"project\":\"cit\",\"service\":\"db\"}}},\"image\":\"cyber-intel-platform:local\",\"name\":\"cit-db-1\"}},\"scope\":\"local\",\"time\":\"1795030908\"}}",
+    "log_format": "json",
+    "location": "Wazuh-Docker"
+   }
+  ],
+  "last": "100151"
+ }
+]

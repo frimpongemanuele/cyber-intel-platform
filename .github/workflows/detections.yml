@@ -1,0 +1,48 @@
+name: detections
+
+# Behavioural tests for the Wazuh rules: the official manager image loads
+# detections/wazuh/rules/cit_rules.xml, and every case in detections/wazuh/tests/cases.json
+# is replayed through Wazuh's own logtest engine (docs/DETECTIONS.md).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  wazuh-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - name: Pick the newest Wazuh 4.14 manager image
+        id: image
+        run: |
+          tag="$(curl -fsSL 'https://hub.docker.com/v2/repositories/wazuh/wazuh-manager/tags?page_size=100&name=4.14' \
+            | python3 -c 'import json,sys,re
+          tags=[t["name"] for t in json.load(sys.stdin)["results"] if re.fullmatch(r"4\.14\.\d+", t["name"])]
+          print(max(tags, key=lambda t: tuple(map(int, t.split(".")))))')"
+          echo "image=wazuh/wazuh-manager:$tag" >> "$GITHUB_OUTPUT"
+          echo "using wazuh/wazuh-manager:$tag"
+      - name: Start a manager with the rules installed
+        run: |
+          docker create --name wazuh "${{ steps.image.outputs.image }}"
+          docker cp detections/wazuh/rules/cit_rules.xml wazuh:/var/ossec/etc/rules/cit_rules.xml
+          docker start wazuh
+          for i in $(seq 1 60); do
+            docker exec wazuh test -S /var/ossec/queue/sockets/logtest && break
+            sleep 5
+          done
+          docker exec wazuh test -S /var/ossec/queue/sockets/logtest
+          docker exec wazuh /var/ossec/bin/wazuh-analysisd -t
+      - name: Replay detection cases through logtest
+        run: |
+          docker cp detections/wazuh/tests/run_logtest.py wazuh:/tmp/run_logtest.py
+          docker cp detections/wazuh/tests/cases.json wazuh:/tmp/cases.json
+          docker exec wazuh /var/ossec/framework/python/bin/python3 /tmp/run_logtest.py /tmp/cases.json
+      - name: Manager log on failure
+        if: failure()
+        run: docker exec wazuh tail -n 60 /var/ossec/logs/ossec.log || docker logs --tail 100 wazuh

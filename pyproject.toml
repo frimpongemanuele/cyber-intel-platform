@@ -18,7 +18,7 @@ net = ["httpx>=0.28,<0.29"]
 db = ["psycopg[binary]>=3.2,<4"]  # SQL-first: no ORM (see ARCHITECTURE ADR-002)
 # Dashboard (ADR-003): server-rendered, zero JavaScript. No FastAPI/python-multipart needed.
 web = ["starlette>=0.46,<2", "jinja2>=3.1.4,<4", "uvicorn>=0.30"]
-dev = ["pytest>=8", "ruff>=0.8", "mypy>=1.13"]
+dev = ["pytest>=8", "ruff>=0.8", "mypy>=1.13", "pyyaml>=6"]
 
 [build-system]
 requires = ["setuptools>=75"]

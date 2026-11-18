@@ -72,16 +72,28 @@ def test_install_is_idempotent_and_keeps_the_original(tmp_path: Path) -> None:
 def test_uninstall_restores_the_original(tmp_path: Path) -> None:
     conf, cit, env = setup(tmp_path)
     run(env, str(cit))
+    rules = conf.parent / "rules" / "cit_rules.xml"
+    assert rules.read_text() == (SCRIPT.parent / "rules" / "cit_rules.xml").read_text()
     r = run(env, "--uninstall")
     assert r.returncode == 0, r.stderr
-    assert conf.read_text() == ORIGINAL
+    assert conf.read_text() == ORIGINAL and not rules.exists()
 
 
 def test_failed_restart_rolls_back(tmp_path: Path) -> None:
     conf, cit, env = setup(tmp_path, restart_ok=False)
+    rules = conf.parent / "rules" / "cit_rules.xml"
     r = run(env, str(cit))
     assert r.returncode == 1 and "restoring" in r.stderr
-    assert conf.read_text() == ORIGINAL
+    assert conf.read_text() == ORIGINAL and not rules.exists()
+
+
+def test_rollback_restores_previous_rules(tmp_path: Path) -> None:
+    conf, cit, env = setup(tmp_path, restart_ok=False)
+    rules = conf.parent / "rules" / "cit_rules.xml"
+    rules.parent.mkdir()
+    rules.write_text("<!-- previous version -->\n")
+    assert run(env, str(cit)).returncode == 1
+    assert rules.read_text() == "<!-- previous version -->\n"
 
 
 @pytest.mark.parametrize("bad", ["relative/path", "/nonexistent-cit-dir"])

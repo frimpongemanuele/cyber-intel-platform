@@ -44,6 +44,7 @@ The archive became the platform's test set: story-linking was designed and measu
 | **Zero-JavaScript dashboard, CSP `default-src 'none'`** | A tool that renders attacker text should give a missed escape nowhere to run | ADR-003; `tests/test_web.py` parses every page for script elements, handlers and script URLs |
 | **SSRF guard with pinned IPs; egress proxy generated from the source registry** | DNS rebinding and redirect tricks are the classic way past URL allowlists | `security/url_guard.py`, `net/fetch.py`, `deploy.py`; CI egress probe |
 | **AI layer gated by containment, not trust** | Prompt injection can't be proven absent; mechanical output validation can be proven | ADR-004, AI.md; `tests/test_ai_containment.py`, `tests/test_ai_db.py` |
+| **Detection-as-code for the platform itself:** 25 Wazuh rules mapped to ATT&CK, tested on the official manager image in CI and fired by a safe simulation on the host | Mitigations stop attacks; detections show that someone tried. Rules that are never tested drift into noise or silence | DETECTIONS.md; `detections/`; `.github/workflows/detections.yml` |
 | **Least-privilege everything at deployment** | A compromise of one service should not become a compromise of the data | DEPLOYMENT.md; `store/grants.sql`; `tests/test_grants.py`, `tests/test_roles_e2e.py`; `.github/workflows/deploy.yml` |
 
 ## 5. How claims are verified

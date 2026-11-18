@@ -2,7 +2,7 @@
 
 A self-hosted cyber threat-intelligence platform for one analyst's homelab. It collects vulnerability and threat data from authoritative sources, enriches and de-duplicates it, and produces a daily briefing. An AI layer explains and connects the data but is **never the source of truth**.
 
-> **Status: v1.0, all 11 phases complete and running in a homelab.** Hardened ingestion from CISA KEV, CVE.org, NVD, FIRST EPSS and curated research feeds; PostgreSQL with integrity rules in SQL; cross-day story identity; a zero-JavaScript dashboard with a transparent priority score; an optional, containment-gated AI layer; and a hardened Docker Compose deployment proven on the live stack in CI. **Start with the [10-minute walkthrough](docs/WALKTHROUGH.md).**
+> **Status: v1.0, all 11 phases complete and running in a homelab.** Hardened ingestion from CISA KEV, CVE.org, NVD, FIRST EPSS and curated research feeds; PostgreSQL with integrity rules in SQL; cross-day story identity; a zero-JavaScript dashboard with a transparent priority score; an optional, containment-gated AI layer; a hardened Docker Compose deployment proven on the live stack in CI, and Wazuh detections for attacks on the platform itself, tested on a real manager in CI. **Start with the [10-minute walkthrough](docs/WALKTHROUGH.md).**
 
 ![Overview (synthetic demo data)](docs/images/overview.png)
 
