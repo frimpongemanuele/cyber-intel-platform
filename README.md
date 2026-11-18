@@ -109,6 +109,7 @@ CIT_WEB_AI=1 python -m cyberintel.web.server
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): decision record, pipeline, data model, deployment
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): trust boundaries, STRIDE, mitigations, verification
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): Proxmox VM, Tailscale, install, backups/restore, operations
+- [`docs/DETECTIONS.md`](docs/DETECTIONS.md): security events the platform emits and the Wazuh detections built on them
 - [`docs/AI.md`](docs/AI.md): the optional AI layer, its backends, and the containment gate
 - [`docs/SCORING.md`](docs/SCORING.md): the priority model, development scores, CVSS headline policy
 - [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md): endpoints, limits, and what the 2026 NVD change means for the design

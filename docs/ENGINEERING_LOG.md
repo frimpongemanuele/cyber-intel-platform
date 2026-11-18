@@ -4,6 +4,17 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Detections, step 1: the platform reports on itself
+
+Before writing SIEM rules, the platform had to become detectable: until now a failed login was visible only as an access-log line (`POST /login 401`) and an SSRF refusal only as a source error string. `security_events.py` adds a closed vocabulary of 13 events, one JSON object per line.
+
+- **The log is an attack surface too.** Values such as a Host header, a feed URL or a model's rejection reason are attacker-influenced, so a naive log line could be split or spoofed. A test sends a Host header containing `"}\n{"cit_event":"auth.login_succeeded"...` and asserts it stays one line with the original event. Bidi and zero-width characters are stripped so an analyst's view cannot be spoofed.
+- **Secrets cannot be logged by mistake.** Field names matching password/token/cookie/key/… raise at the call site, and tests assert the submitted password and session cookie never appear.
+- **Mutation-checked:** removing any emission point (9 tried) or any safeguard in the module (6 tried) fails a test.
+- **Firewall rule now logs as well as drops.** Re-running the script must replace, not stack, the rules. The first version deleted rules by replaying `iptables -S` output, which broke on the quoted log prefix (`"CIT-WEB-EGRESS "`); rules are now found by comment and deleted by position. Tested locally: idempotent, subnet change, a foreign rule preserved, LOG before DROP. CI checks that the blocked attempt appears in the kernel log.
+
+---
+
 ## 2026-11-18 — Phase 11: documentation, and the first real install
 
 ### First install on real hardware: a VirtualBox VM shared with a SIEM

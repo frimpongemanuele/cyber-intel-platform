@@ -33,6 +33,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from cyberintel.security_events import emit
 from cyberintel.web.auth import AuthConfig, LoginThrottle
 from cyberintel.web.reader import ReaderLike, merge_health
 from cyberintel.web.views import (
@@ -97,6 +98,30 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
+def _client(request: Request) -> str:
+    """Peer address as seen by the server; never taken from X-Forwarded-For."""
+    return request.client.host if request.client else "unknown"
+
+
+class HostAuditMiddleware:
+    """Records requests whose Host header is not allowed (DNS-rebinding probes, scanners).
+
+    It only observes: TrustedHostMiddleware, which runs next, still makes the decision.
+    """
+
+    def __init__(self, app: ASGIApp, allowed_hosts: Sequence[str]) -> None:
+        self.app = app
+        self.allowed = {h.lower() for h in allowed_hosts}
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and "*" not in self.allowed:
+            raw = dict(scope.get("headers") or []).get(b"host", b"").decode("latin-1")
+            if raw.split(":")[0].lower() not in self.allowed:
+                client = scope.get("client")
+                emit("web.host_rejected", host=raw, client=client[0] if client else "unknown")
+        await self.app(scope, receive, send)
+
+
 def same_origin(request: Request) -> bool:
     """True only for requests the browser marks as same-origin (CSRF defence for POSTs)."""
     site = request.headers.get("sec-fetch-site")
@@ -151,7 +176,10 @@ def create_app(
         fn: Callable[[Request], Response],
     ) -> Callable[[Request], Awaitable[Response]]:
         async def wrapper(request: Request) -> Response:
-            if not auth.signer.verify(request.cookies.get(cookie)):
+            presented = request.cookies.get(cookie)
+            if not auth.signer.verify(presented):
+                if presented:  # a cookie was sent but is forged, tampered or expired
+                    emit("auth.session_rejected", client=_client(request), path=request.url.path)
                 return RedirectResponse("/login", status_code=303)
             try:
                 return await run_in_threadpool(fn, request)
@@ -262,13 +290,15 @@ def create_app(
 
     async def login(request: Request) -> Response:
         if not same_origin(request):
+            emit("web.csrf_refused", client=_client(request), path="/login")
             return PlainTextResponse("cross-site request refused", status_code=403)
         if request.headers.get("content-type", "").split(";")[0].strip() != (
             "application/x-www-form-urlencoded"
         ):
             return PlainTextResponse("unsupported content type", status_code=415)
-        client = request.client.host if request.client else "unknown"  # never X-Forwarded-For
+        client = _client(request)
         if not throttle.allowed(client):
+            emit("auth.login_throttled", client=client)
             return page(
                 request,
                 "login.html",
@@ -286,6 +316,7 @@ def create_app(
             return PlainTextResponse("malformed form", status_code=400)
         if await run_in_threadpool(auth.password.verify, fields.get("password", "")):
             throttle.record_success(client)
+            emit("auth.login_succeeded", client=client)
             response = RedirectResponse("/", status_code=303)
             response.set_cookie(
                 cookie,
@@ -297,10 +328,12 @@ def create_app(
             )
             return response
         throttle.record_failure(client)
+        emit("auth.login_failed", client=client)
         return page(request, "login.html", 401, error="Wrong password.")
 
     async def logout(request: Request) -> Response:
         if not same_origin(request):
+            emit("web.csrf_refused", client=_client(request), path="/logout")
             return PlainTextResponse("cross-site request refused", status_code=403)
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(
@@ -343,6 +376,7 @@ def create_app(
         routes=routes,
         middleware=[
             Middleware(SecurityHeadersMiddleware, hsts=hsts),
+            Middleware(HostAuditMiddleware, allowed_hosts=list(allowed_hosts)),
             Middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts)),
         ],
         exception_handlers={HTTPException: http_error, Exception: http_error},

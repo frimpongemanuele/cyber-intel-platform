@@ -139,8 +139,11 @@ jobs:
           docker compose exec -T web python -c "$probe"
           sudo deploy/scripts/host-firewall.sh
           sudo deploy/scripts/host-firewall.sh   # idempotent
-          test "$(sudo iptables -S DOCKER-USER | grep -c cit-web-no-egress)" = 1
+          test "$(sudo iptables -S DOCKER-USER | grep -c -- '--comment cit-web-no-egress -j DROP')" = 1
+          test "$(sudo iptables -S DOCKER-USER | grep -c -- '--comment cit-web-no-egress-log -j LOG')" = 1
           ! docker compose exec -T web python -c "$probe"
+          # the blocked attempt is in the kernel log for the SIEM
+          sudo dmesg | grep -q "CIT-WEB-EGRESS "
           # inbound requests through the published port still work
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: localhost' http://127.0.0.1:8080/healthz)" = 200
       - name: Egress allowlist holds
@@ -164,6 +167,14 @@ jobs:
           cookie="$(grep -i '^set-cookie: __Host-cit_session=' /tmp/login.txt | sed 's/^[^:]*: //; s/;.*//' | tr -d '\r')"
           test -n "$cookie"
           curl -sf -H "$h" -H "Cookie: $cookie" "$base/vulns?kev=1" | grep -q 'CVE-'
+          # security events reach the container log as single-line JSON (docs/DETECTIONS.md)
+          curl -s -o /dev/null -H "$h" -H 'Sec-Fetch-Site: same-origin' --data-urlencode 'password=wrong-password-x' $base/login
+          curl -s -o /dev/null -H 'Host: rebind.attacker.example' $base/healthz
+          docker compose logs --no-log-prefix web > /tmp/web.log
+          grep -q '"cit_event":"auth.login_failed","severity":"medium","service":"web"' /tmp/web.log
+          grep -q '"cit_event":"auth.login_succeeded"' /tmp/web.log
+          grep -q '"cit_event":"web.host_rejected"' /tmp/web.log
+          ! grep -q 'wrong-password-x' /tmp/web.log
       - name: Backup and restore check
         run: |
           docker compose run --rm --no-deps backup --once
