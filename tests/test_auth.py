@@ -88,7 +88,10 @@ def test_session_rejects_tampering_and_other_keys() -> None:
     payload["exp"] += 10**6  # try to extend the session
     forged = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
     assert not signer.verify(f"{forged}.{mac}")
-    assert not signer.verify(f"{body}.{mac[:-1]}A")
+    # Flip the last MAC character to a *different* one. (The original appended "A", which
+    # was a no-op whenever the MAC already ended in "A": a 1-in-64 flaky pass/fail.)
+    flipped = "B" if mac[-1] == "A" else "A"
+    assert not signer.verify(f"{body}.{mac[:-1]}{flipped}")
     assert not SessionSigner(bytes(32), clock=clock).verify(token)  # rotated secret
 
 

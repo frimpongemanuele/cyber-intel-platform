@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block title %}{{ s.title }}{% endblock %}
 {% block content %}
 <p class="crumbs"><a href="/stories">Stories</a> /</p>
@@ -21,4 +22,29 @@
 </table>
 </div>
 </section>
+{% if ai %}
+<section class="ai-panel" aria-labelledby="ai-h">
+<h2 id="ai-h">AI analysis <span class="tag tag-ai">AI-generated · may be wrong</span></h2>
+<p class="muted">Written by {{ ai.model }} ({{ ai.provider }}, prompt {{ ai.prompt_version }}) on {{ ai.created_at|date }} from the sources below. The facts on this page (KEV, EPSS, CVSS, priority) come from authoritative feeds; this text does not change them.</p>
+{% if ai.injection_suspected %}<p class="warn">The model reported instruction-like text in the collected sources. Read them critically.</p>{% endif %}
+<p>{{ ai.out.summary }}</p>
+<h3>Why it matters</h3>
+<p>{{ ai.out.why_it_matters }}</p>
+{% if ai.out.key_points %}<ul class="list">{% for k in ai.out.key_points %}<li>{{ k }}</li>{% endfor %}</ul>{% endif %}
+<div class="cols">
+<div>
+<h3>Relevance <span class="muted">(model's opinion, 0–5 · confidence {{ ai.out.confidence }})</span></h3>
+<table class="compact"><tbody>{% for label, v in ai.relevance %}<tr><th scope="row">{{ label }}</th><td>{{ v }}</td></tr>{% endfor %}</tbody></table>
+</div>
+<div>
+{% if ai.out.learning %}<h3>Learn this (authorised lab only)</h3>
+<ul class="list">{% for l in ai.out.learning %}<li><b>{{ l.topic }}</b> <span class="muted">{{ l.reason }}</span></li>{% endfor %}</ul>{% endif %}
+{% if ai.out.cited_urls %}<h3>Sources used</h3>
+<ul class="list">{% for u in ai.out.cited_urls %}<li>{{ m.ext_link(u, u) }}</li>{% endfor %}</ul>{% endif %}
+</div>
+</div>
+</section>
+{% elif ai_enabled %}
+<p class="muted">No AI analysis for this story yet.</p>
+{% endif %}
 {% endblock %}

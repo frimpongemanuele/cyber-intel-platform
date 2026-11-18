@@ -194,3 +194,13 @@ LEFT JOIN LATERAL (
 ) AS r ON true
 ORDER BY s.source_name
 """
+
+# Latest *validated* AI analysis for a story. Rejected rows and raw model output are never
+# selected by the dashboard.
+LATEST_AI_ANALYSIS: Final = """
+SELECT a.output, a.provider, a.model, a.prompt_version, a.created_at, a.injection_suspected
+FROM ai_analyses a
+WHERE a.development_id = %(development_id)s AND a.validated
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT 1
+"""

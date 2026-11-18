@@ -73,3 +73,9 @@ code { font-size: .8rem; word-break: break-all; }
 .error { color: var(--high); }
 footer { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 2rem; color: var(--muted);
          font-size: .8rem; border-top: 1px solid var(--line); }
+/* AI panel: visually distinct from authoritative facts (Phase 9) */
+.ai-panel { margin-top: 2rem; padding: 1rem 1.25rem; border: 1px dashed var(--mid);
+            border-radius: 8px; background: var(--panel); }
+.tag-ai { border-color: var(--mid); color: var(--mid); font-weight: 600; }
+.warn { color: var(--mid); }
+table.compact th, table.compact td { padding: .15rem .6rem; }

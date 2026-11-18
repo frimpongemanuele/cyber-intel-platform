@@ -27,6 +27,7 @@ from cyberintel.store.repo import Store  # noqa: E402
 
 FIX = Path(__file__).parent / "fixtures"
 T1 = datetime(2026, 11, 18, 6, 0, tzinfo=UTC)
+ALL_VERSIONS = [m.version for m in migrate.discover()]
 T2 = datetime(2026, 11, 19, 6, 0, tzinfo=UTC)
 
 
@@ -63,12 +64,13 @@ def table_count(conn: psycopg.Connection, table: str, where: str = "true") -> in
 
 def test_migrations_apply_idempotently_and_roll_back(empty_db: str) -> None:
     with psycopg.connect(dbname=empty_db, autocommit=True) as c:
-        assert migrate.apply(c) == [1, 2]
+        assert migrate.apply(c) == ALL_VERSIONS
         assert migrate.apply(c) == []
-        assert table_count(c, "pg_tables", "schemaname = 'public'") == 14  # + schema_migrations
-        assert migrate.rollback(c, 0) == [2, 1]  # newest first
+        # 13 fact tables + 2 AI tables (0003) + schema_migrations
+        assert table_count(c, "pg_tables", "schemaname = 'public'") == 16
+        assert migrate.rollback(c, 0) == ALL_VERSIONS[::-1]  # newest first
         assert table_count(c, "pg_tables", "schemaname = 'public'") == 1
-        assert migrate.apply(c) == [1, 2]
+        assert migrate.apply(c) == ALL_VERSIONS
 
 
 def test_tampered_checksum_stops_migrations(empty_db: str) -> None:
@@ -96,7 +98,7 @@ def test_concurrent_deployers_apply_each_migration_once(empty_db: str) -> None:
     for t in threads:
         t.join()
     assert not errors, errors
-    assert sorted(v for r in results for v in r) == [1, 2]  # each applied exactly once
+    assert sorted(v for r in results for v in r) == ALL_VERSIONS  # each applied exactly once
 
 
 # --------------------------------------------------------------------------- repository
