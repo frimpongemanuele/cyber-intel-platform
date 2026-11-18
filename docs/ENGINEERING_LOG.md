@@ -4,6 +4,15 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Detections, steps 3–6: rules tested on a real Wazuh manager
+
+- **Collection verified on the VM before writing rules.** `wazuh-logtest` decoded the platform events into fields, a FIM alert fired in real time, and the Docker listener was running. The Docker check produced the most useful finding: **built-in rule 87907 had fired 106 times in the first hour, all for the database's health check**, because Docker runs health checks through the same `exec` an attacker would use. Rule 100150 silences exactly the three health-check commands in `compose.yaml`; a test keeps the list equal to the compose file, and four look-alike commands (for example the health check with `; cat /run/secrets/...` appended) must still alert.
+- **Rules are tested where they run.** Nothing in this environment can run Wazuh, and rule semantics (when does `frequency="5"` fire? does `if_sid` combine with `if_matched_group`?) should be measured, not assumed. CI starts the newest official 4.14 manager image, loads the rules and replays 28 sequences through the logtest socket, one session per sequence. Measured: brute force fires on exactly the 5th failure; "success after brute force" escalates to 12 while a single typo followed by a success stays at 3.
+- **Two bugs the replay found on its first run:** the kernel egress rule never matched, because Wazuh's iptables decoder sends those lines to built-in rule 4100 first, so the rule is now its child. And the egress health check was not silenced, because Wazuh's XML parser does not decode `&lt;&gt;`, so the pattern uses `\x3c\x3e`.
+- **Host-only behaviour is checked on the host.** FIM events come from Wazuh's syscheck module, not a log line, so logtest cannot replay them. They are listed explicitly in the test as host-verified, and `detections/simulate.sh` fires 14 detections against the lab itself and prints PASS/MISS from `alerts.json`.
+
+---
+
 ## 2026-11-18 — Detections, step 2: collection in Wazuh
 
 The manager on the VM already read journald (so the kernel's `CIT-WEB-EGRESS` lines needed nothing) and ran file-integrity monitoring. Added, in `detections/wazuh/`:

@@ -25,7 +25,7 @@ jobs:
           docker run --rm -i hadolint/hadolint hadolint --failure-threshold warning - < Dockerfile
           docker run --rm -i hadolint/hadolint hadolint --failure-threshold warning - < deploy/squid/Dockerfile
       - name: Shell lint (shellcheck)
-        run: shellcheck --severity=warning deploy/postgres/initdb/*.sh deploy/backup/*.sh deploy/scripts/*.sh
+        run: shellcheck --severity=warning deploy/postgres/initdb/*.sh deploy/backup/*.sh deploy/scripts/*.sh detections/*.sh detections/wazuh/*.sh
       - name: Compose file valid (all profiles)
         run: |
           mkdir -p deploy/secrets
