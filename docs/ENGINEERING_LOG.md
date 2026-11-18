@@ -4,6 +4,30 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Phase 11: documentation, and the first real install
+
+### First install on real hardware: a VirtualBox VM shared with a SIEM
+The stack was installed on an existing Ubuntu 24.04 VirtualBox VM running a Wazuh manager (8 GB RAM; about 5 GB free). It came up first time. The first ingest pulled 1,782 KEV entries, 408,395 EPSS scores, 2,744 NVD changes and 15 feeds, and the archive import produced 54 stories from 65 developments. What the install taught us is now in DEPLOYMENT.md §8–9:
+
+- **Host-header allowlist vs `tailscale serve`.** The first request was refused as "Invalid host header"; adding `127.0.0.1` to the allowlist fixed it. Requests forwarded by `tailscale serve` can carry the loopback host name. Allowing it is safe because the port is loopback-only, so `.env.example` now includes it.
+- **Port 443 was taken** by the SIEM's dashboard: `tailscale serve --https=8443` instead.
+- **VPN-free access from the host PC** needed a second published address (the VirtualBox NAT address, reachable only through a port-forwarding rule) and `localhost` in the allowlist. Shipped as `deploy/compose.localhost.example.yaml`, with the reasoning for why it does not expose the LAN.
+- **The first port-forwarding rule silently did not exist.** Windows' Hyper-V port reservations were checked and ruled out; the guide now says how to check both.
+- **Two flaky sources** surfaced (CISA advisories 403 from some networks; CVE.org disconnects under bursts). Both degrade gracefully by design and are documented as known issues rather than hidden.
+
+### Screenshots without leaking anything
+The dashboard on the real instance shows titles from the private archive, and real screenshots also capture a personal browser. The published images are instead rendered by `tools/screenshots.py`: the real app (same templates, CSP and login flow) served with an in-memory synthetic dataset (`tools/demo_reader.py`; invented vendors, a high unused CVE range, `.example` domains) and captured with headless Chrome. A test renders every demo page and checks it for injection, so the demo cannot drift from the real page shapes. Reviewing the first renders caught one incoherence (a CVE page listing news about a different product), now fixed and tested.
+
+### Daily archive sync
+`deploy/scripts/archive-sync.sh` pulls the archive with the read-only deploy key and re-imports it only when the archive changed. A templated systemd timer runs it at 08:00 Europe/Rome, after the 07:00 research run. The script was tested against a local git remote with a stubbed `docker` (unchanged, changed, forced, missing clone); the calendar spec was checked with `systemd-analyze calendar`.
+
+### Final review
+- ARCHITECTURE's data-model section now separates *built* from *planned*, so the original sketch (embeddings, ATT&CK, reports) is not mistaken for shipped features.
+- No stale "next phase" statements remain, and every relative link and image in the docs resolves (checked by script).
+- WALKTHROUGH.md gives reviewers a 10-minute path: problem, decisions, where each claim is tested, honest limits.
+
+---
+
 ## 2026-11-18 — Phase 10: hardened deployment
 
 ### Verification strategy: the real stack, in CI

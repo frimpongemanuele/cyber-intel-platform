@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Cyber Intelligence Platform
 
-> Status: **v0.6** (2026-11-18). Phases 6–10 built (ingestion, database, dashboard, optional AI layer, hardened deployment); see ENGINEERING_LOG.md, AI.md and DEPLOYMENT.md.
+> Status: **v1.0** (2026-11-18). Phases 1–11 complete: ingestion, database, dashboard, optional AI layer, hardened deployment, documentation. See WALKTHROUGH.md for a guided tour.
 > Companion docs: `THREAT_MODEL.md` (security design), `SCHEMA.md` (current archive format).
 
 ## 1. Decision record (ADR-001): hybrid architecture
@@ -114,7 +114,17 @@
 
 ## 5. Data model (v1)
 
-> As built: `src/cyberintel/store/migrations/0001_initial.up.sql` is authoritative. The sketch below is the original design; `ai_analyses` and `scores` arrive with Phase 9.
+> **As built (v0.6):** the migrations in `src/cyberintel/store/migrations/` are authoritative. The sketch below is the original design, kept to show the reasoning. What changed:
+>
+> | Built | Tables / views |
+> |---|---|
+> | Facts | `vulnerabilities` (CVE.org + NVD, with headline-score provenance), `cvss_scores` (every score, by issuer), `affected_products`, `vulnerability_references`, `kev_entries`, `epss_scores` |
+> | Evidence | `documents` (canonical URL, capped excerpt, extracted CVEs), `source_state`, `fetch_runs` |
+> | Stories | `developments`, `development_sightings`, `development_vulnerabilities`, `development_links` |
+> | Derived | `vulnerability_overview` view: transparent 0–100 priority, every component a column |
+> | AI (optional) | `ai_analyses` (provenance: model, prompt version + hash, input hash, document and CVE ids), `ai_usage` |
+>
+> Not built (yet): `raw_documents` (documents keep a capped excerpt instead), embeddings, vendor/product/actor/tool registries, ATT&CK techniques, a `scores` table comparing rule and LLM scores (the AI's 7-axis opinion lives inside `ai_analyses.output`), `reports`, `learning_items`. Story↔document links are derived from shared CVEs rather than a `development_documents` table.
 
 The core design rule: **facts, raw evidence, and AI interpretation live in different tables.** AI rows reference the evidence they were produced from.
 
@@ -199,7 +209,7 @@ Before Phase 2, check the current state of the CVE/NVD ecosystem (enrichment bac
 | 8 | FastAPI + HTMX dashboard | Lists developments, CVE detail, filters by score/track |
 | 9 | AI layer (structured outputs, provenance) — **done** (ADR-004, AI.md) | Every summary links its input docs; injection test suite passes |
 | 10 | Compose deployment on Proxmox — **done** (DEPLOYMENT.md) | Deployed and reachable only over the VPN; restore from backup tested (CI proves the stack; the VM install is the operator's step) |
-| 11 | Documentation | README, ARCHITECTURE, THREAT_MODEL, DATA_SOURCES, SCORING, DEPLOYMENT, screenshots |
+| 11 | Documentation — **done** | README, ARCHITECTURE, THREAT_MODEL, DATA_SOURCES, SCORING, DEPLOYMENT, AI, WALKTHROUGH, screenshots |
 
 **MVP cut (2–3 weekends):** KEV + NVD + EPSS + ~20 RSS → Postgres → a daily Markdown report that matches the agent's brief on at least the top vulnerabilities. Everything else comes after.
 

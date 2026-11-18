@@ -1,0 +1,13 @@
+# Optional: reach the dashboard from the machine that hosts a VirtualBox VM, without a VPN.
+#
+#   cp deploy/compose.localhost.example.yaml compose.override.yaml   (Compose loads it automatically)
+#   VirtualBox NAT port forwarding: host 127.0.0.1:18080 -> guest 10.0.2.15:8080
+#   add "localhost" to CIT_WEB_ALLOWED_HOSTS in .env, then: docker compose up -d web
+#
+# 10.0.2.15 is VirtualBox's fixed NAT address for the guest: it is reachable only through
+# port-forwarding rules you create, so this does not expose the dashboard to your LAN.
+# Do NOT use 0.0.0.0 here on a bridged or directly networked host.
+services:
+  web:
+    ports:
+      - "10.0.2.15:8080:8080"
