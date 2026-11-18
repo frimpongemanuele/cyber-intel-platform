@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+<h1>Overview</h1>
+<section class="cards">
+  <a class="card" href="/vulns?kev=1&sort=newest_kev"><b>{{ summary.kev_new_7d }}</b> new KEV entries (7 days)<small>{{ summary.kev_active }} active in KEV</small></a>
+  <a class="card" href="/vulns?exploited=1"><b>{{ summary.ssvc_active }}</b> CVEs with SSVC “active”<small>CISA-ADP exploitation signal</small></a>
+  <a class="card" href="/stories"><b>{{ summary.stories_7d }}</b> stories active (7 days)</a>
+  <a class="card" href="/news"><b>{{ summary.docs_24h }}</b> new articles (24 h)</a>
+  <a class="card{% if summary.sources_failing %} card-warn{% endif %}" href="/sources"><b>{{ summary.sources_failing }}</b> failing sources<small>last ingest {{ summary.last_ingest|date }}</small></a>
+</section>
+
+<h2>Highest priority</h2>
+<table>
+  <thead><tr><th>Priority</th><th>CVE</th><th>What</th><th>Signals</th><th>EPSS</th><th>CVSS</th></tr></thead>
+  <tbody>
+  {% for v in top %}
+    <tr>
+      <td>{{ m.priority(v) }}</td>
+      <td><a href="/vulns/{{ v.cve_id|urlencode }}">{{ v.cve_id }}</a></td>
+      <td>{{ v.title or "—" }}</td>
+      <td>{{ m.kev(v) }}</td>
+      <td>{{ v.epss_percentile|pct }}</td>
+      <td>{{ m.headline(v) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No data yet. Run the ingest job.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a href="/vulns">All vulnerabilities &rarr;</a></p>
+
+<div class="cols">
+  <section>
+    <h2>Recent stories</h2>
+    <ul class="list">
+    {% for s in stories %}
+      <li><a href="/stories/{{ s.slug|urlencode }}">{{ s.title }}</a>
+        <span class="muted">{{ s.first_seen|date }} → {{ s.last_seen|date }} · {{ s.sightings }} sighting{{ "s" if s.sightings != 1 else "" }}</span></li>
+    {% else %}<li class="muted">No stories yet.</li>{% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Latest news</h2>
+    <ul class="list">
+    {% for d in news %}
+      <li>{{ m.ext_link(d.url, d.title) }} <span class="muted">{{ d.source_name }} · {{ (d.published_at or d.first_seen_at)|date }}</span></li>
+    {% else %}<li class="muted">No articles yet.</li>{% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}{{ v.cve_id }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/vulns">Vulnerabilities</a> /</p>
+<h1>{{ v.cve_id }} {{ m.priority(v) }}</h1>
+<p class="lead">{{ v.title or "" }}</p>
+<p>{{ m.kev(v) }}</p>
+
+<section class="cols">
+<div>
+<h2>Why this priority</h2>
+<table class="kv">
+  <tr><th>Exploitation evidence</th><td>{{ v.p_exploitation }}</td><td class="muted">KEV 40 · SSVC active 30 · PoC 10</td></tr>
+  <tr><th>EPSS (prediction)</th><td>{{ v.p_epss|num }}</td><td class="muted">20 × percentile ({{ v.epss_percentile|pct }})</td></tr>
+  <tr><th>Severity</th><td>{{ v.p_severity|num }}</td><td class="muted">2 × headline CVSS</td></tr>
+  <tr><th>Ransomware</th><td>{{ v.p_ransomware }}</td><td class="muted">KEV ransomware flag</td></tr>
+  <tr><th>Recency</th><td>{{ v.p_recency }}</td><td class="muted">added to KEV ≤ 14 days ago</td></tr>
+  <tr><th>Total</th><td><b>{{ v.priority|num }}</b></td><td></td></tr>
+</table>
+</div>
+<div>
+<h2>CVSS scores and who issued them</h2>
+<table>
+  <thead><tr><th>Score</th><th>Version</th><th>Issued by</th><th>Via</th><th>Vector</th></tr></thead>
+  <tbody>
+  {% for s in scores %}
+    <tr{% if s.version == v.headline_version and s.origin == v.headline_origin and s.provider == v.headline_provider %} class="headline"{% endif %}>
+      <td>{{ s.base_score|num }}</td><td>{{ s.version }}</td>
+      <td>{{ ORIGIN_LABELS.get(s.origin, s.origin) }} <span class="muted">{{ s.provider }}</span></td>
+      <td>{{ s.collected_from }}</td><td><code>{{ s.vector or "—" }}</code></td>
+    </tr>
+  {% else %}<tr><td colspan="5" class="muted">No CVSS score from any source.</td></tr>{% endfor %}
+  </tbody>
+</table>
+<p class="muted">Highlighted row = headline score (v3.x first, then NVD &gt; CNA &gt; CISA-ADP). Scores from different issuers can disagree; all are kept.</p>
+</div>
+</section>
+
+{% if kev %}
+<h2>CISA KEV</h2>
+<table class="kv">
+  <tr><th>Name</th><td>{{ kev.name }}</td></tr>
+  <tr><th>Vendor / product</th><td>{{ kev.vendor }} / {{ kev.product }}</td></tr>
+  <tr><th>Added · due</th><td>{{ kev.date_added|date }} · {{ kev.due_date|date }}</td></tr>
+  <tr><th>Required action</th><td>{{ kev.required_action }}</td></tr>
+  {% if kev.removed_at %}<tr><th>Removed from KEV</th><td>{{ kev.removed_at|date }}</td></tr>{% endif %}
+</table>
+{% endif %}
+
+{% if record %}
+<h2>Record</h2>
+<p class="desc">{{ record.description or "No description." }}</p>
+<table class="kv">
+  <tr><th>Assigner (CNA)</th><td>{{ record.assigner or "—" }}</td></tr>
+  <tr><th>Published · updated</th><td>{{ record.published_at|date }} · {{ record.updated_at|date }}</td></tr>
+  <tr><th>CWE</th><td>{{ record.cwes|join(", ") or "—" }}</td></tr>
+  <tr><th>CISA-ADP SSVC</th><td>exploitation: {{ record.ssvc_exploitation or "—" }} · automatable: {{ record.ssvc_automatable or "—" }} · technical impact: {{ record.ssvc_technical_impact or "—" }}</td></tr>
+  <tr><th>NVD status</th><td>{{ record.nvd_status or "not fetched" }}{% if record.nvd_status in NVD_STATUS_HELP %} <span class="muted">— {{ NVD_STATUS_HELP[record.nvd_status] }}</span>{% endif %}</td></tr>
+</table>
+{% endif %}
+
+<section class="cols">
+<div>
+<h2>Affected products</h2>
+<ul class="list">{% for p in products %}<li>{{ p.vendor }} — {{ p.product }}</li>{% else %}<li class="muted">None recorded.</li>{% endfor %}</ul>
+<h2>References</h2>
+<ul class="list">{% for r in references %}<li>{{ m.ext_link(r.url, r.url) }}</li>{% else %}<li class="muted">None recorded.</li>{% endfor %}</ul>
+</div>
+<div>
+<h2>In the news</h2>
+<ul class="list">{% for d in documents %}<li>{{ m.ext_link(d.url, d.title) }} <span class="muted">{{ d.source_name }} · {{ d.published_at|date }}</span></li>{% else %}<li class="muted">No collected articles mention it.</li>{% endfor %}</ul>
+<h2>Stories</h2>
+<ul class="list">{% for s in stories %}<li><a href="/stories/{{ s.slug|urlencode }}">{{ s.title }}</a> <span class="muted">{{ s.first_seen|date }} → {{ s.last_seen|date }}{% if s.is_rollup %} · roll-up{% endif %}</span></li>{% else %}<li class="muted">Not part of a tracked story.</li>{% endfor %}</ul>
+</div>
+</section>
+{% endblock %}

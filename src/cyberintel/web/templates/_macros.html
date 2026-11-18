@@ -1,0 +1,30 @@
+{% macro priority(row) -%}
+<span class="prio prio-{{ 'high' if row.priority >= 60 else 'mid' if row.priority >= 30 else 'low' }}"
+      title="exploitation {{ row.p_exploitation }} + EPSS {{ row.p_epss }} + severity {{ row.p_severity }} + ransomware {{ row.p_ransomware }} + recency {{ row.p_recency }}">{{ row.priority|num }}</span>
+{%- endmacro %}
+
+{% macro headline(row) -%}
+{% if row.headline_score is not none %}
+<span class="score">{{ row.headline_score|num }}</span>
+<span class="muted">v{{ row.headline_version }} · {{ ORIGIN_LABELS.get(row.headline_origin, row.headline_origin) }}</span>
+{% else %}<span class="muted">unscored</span>{% endif %}
+{%- endmacro %}
+
+{% macro kev(row) -%}
+{% if row.in_kev %}<span class="tag tag-kev">KEV {{ row.kev_date_added|date }}</span>{% if row.ransomware_known %} <span class="tag tag-ransom">ransomware</span>{% endif %}{% endif %}
+{%- if row.ssvc_exploitation == 'active' %} <span class="tag tag-active">SSVC: active</span>{% endif %}
+{%- endmacro %}
+
+{% macro pager(p) -%}
+{% if p.prev or p.next %}
+<nav class="pager" aria-label="Pages">
+  {% if p.prev %}<a href="{{ p.prev }}">&larr; Previous</a>{% endif %}
+  <span>Page {{ p.page }} of {{ p.pages }} · {{ p.total }} results</span>
+  {% if p.next %}<a href="{{ p.next }}">Next &rarr;</a>{% endif %}
+</nav>
+{% else %}<p class="muted">{{ p.total }} results</p>{% endif %}
+{%- endmacro %}
+
+{% macro ext_link(url, text) -%}
+<a href="{{ url|safe_url }}" rel="noreferrer nofollow external">{{ text }}</a>
+{%- endmacro %}

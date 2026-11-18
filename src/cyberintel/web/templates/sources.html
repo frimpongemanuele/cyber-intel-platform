@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Sources{% endblock %}
+{% block content %}
+<h1>Source health</h1>
+<table>
+  <thead><tr><th>Source</th><th>Kind</th><th>Tier</th><th>Last result</th><th>Last success</th><th>Failures in a row</th><th>Last error</th></tr></thead>
+  <tbody>
+  {% for s in rows %}
+    <tr{% if s.consecutive_failures %} class="warn"{% endif %}>
+      <td>{{ s.name }}</td><td>{{ s.kind }}</td><td>{{ s.tier }}</td>
+      <td>{{ s.outcome or "never run" }}{% if s.http_status %} ({{ s.http_status }}){% endif %}{% if s.records_ok is not none %} · {{ s.records_ok }} ok{% endif %}</td>
+      <td>{{ s.last_success_at|date }}</td><td>{{ s.consecutive_failures }}</td>
+      <td class="muted">{{ s.last_error or "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

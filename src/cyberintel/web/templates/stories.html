@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Stories{% endblock %}
+{% block content %}
+<h1>Stories</h1>
+<p class="muted">A story is one development followed across days. Roll-ups (Patch Tuesday, KEV batches) link to the stories they touch instead of merging them.</p>
+<form method="get" action="/stories" class="filters">
+  <input type="search" name="q" value="{{ query.q or '' }}" placeholder="Search titles…" maxlength="100" aria-label="Search">
+  <label><input type="checkbox" name="rollups" value="1"{% if query.rollups %} checked{% endif %}> Include roll-ups</label>
+  <button type="submit">Apply</button>
+</form>
+<table>
+  <thead><tr><th>Story</th><th>First seen</th><th>Last seen</th><th>Sightings</th><th>Max urgency</th><th>CVEs</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for s in rows %}
+    <tr>
+      <td><a href="/stories/{{ s.slug|urlencode }}">{{ s.title }}</a>{% if s.is_rollup %} <span class="tag">roll-up</span>{% endif %}</td>
+      <td>{{ s.first_seen|date }}</td><td>{{ s.last_seen|date }}</td><td>{{ s.sightings }}</td>
+      <td>{{ s.max_urgency if s.max_urgency is not none else "—" }}</td><td>{{ s.cves }}</td>
+      <td>{{ s.status }} · {{ s.confidence }}</td>
+    </tr>
+  {% else %}<tr><td colspan="7" class="muted">No stories match.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{{ m.pager(pager) }}
+{% endblock %}

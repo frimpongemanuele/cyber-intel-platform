@@ -49,7 +49,7 @@ TB6  agent / reporter ──►  GitHub       (outbound write)
 
 | # | Threat | Scenario | Mitigation |
 |---|---|---|---|
-| T9 | **Stored XSS** (T/E) | Feed HTML or LLM output contains `<script>` or `javascript:` links rendered in the dashboard | Jinja autoescape on; collected HTML is sanitized with `nh3` before storage and rendered as text by default; strict **CSP** (no inline script, HTMX loaded from self); URL scheme allowlist (`http`/`https`) on rendered links |
+| T9 | **Stored XSS** (T/E) — **implemented (Phase 8)** | Feed HTML or LLM output contains `<script>` or `javascript:` links rendered in the dashboard | Jinja autoescape on; collected HTML is sanitized with `nh3` before storage and rendered as text by default; strict **CSP** (`default-src 'none'`; the dashboard ships no JavaScript at all); URL scheme allowlist (`http`/`https`) on rendered links |
 | T10 | **Fact corruption** (T) | AI output silently overwrites CVSS/KEV fields | Separate tables (`vulnerabilities` written only by enrichment). `ai_analyses` stores provenance (`input_document_ids`, `input_hash`, `model`, `prompt_version`) |
 | T11 | **Hallucinated sources** (R) | A summary cites a URL that was never collected | Validator rejects any cited URL not in `input_document_ids` |
 | T12 | **Markdown/report injection** | Malicious titles break out of tables or inject links into the git archive | Escape pipes and brackets; same URL allowlist for report links |
@@ -58,8 +58,8 @@ TB6  agent / reporter ──►  GitHub       (outbound write)
 
 | # | Threat | Mitigation |
 |---|---|---|
-| T13 | Unauthorized access (S/I) | **No public exposure**; reachable only over Tailscale/WireGuard, plus app auth (single user, argon2id password or OIDC via Tailscale identity). Do not trust `X-Forwarded-For` or loopback origin for auth (the **GPUStack CVE-2026-102895** lesson). Auth checks fail closed (the **SSHole** lesson) |
-| T14 | CSRF / injection (T) | SameSite=strict cookies + CSRF tokens on HTMX POSTs; SQLAlchemy parameterized queries only; Pydantic validation on all input |
+| T13 | Unauthorized access (S/I) — **implemented (Phase 8)** | **No public exposure**; reachable only over Tailscale/WireGuard, plus app auth (single user, argon2id password or OIDC via Tailscale identity). Do not trust `X-Forwarded-For` or loopback origin for auth (the **GPUStack CVE-2026-102895** lesson). Auth checks fail closed (the **SSHole** lesson) |
+| T14 | CSRF / injection (T) — **implemented (Phase 8)** | SameSite=Strict `__Host-` cookies + Sec-Fetch-Site/Origin check on the only two POSTs (login, logout); bound-parameter SQL only, sort keys from an allowlist, LIKE wildcards escaped; Pydantic validation on every query parameter; read-only database sessions for the web tier |
 
 ### TB5 — Supply chain
 
@@ -86,7 +86,8 @@ TB6  agent / reporter ──►  GitHub       (outbound write)
 | SSRF suite: feed items pointing at `127.0.0.1`, `169.254.169.254`, `10.x`, `[::1]`, decimal/octal IP encodings, redirect-to-internal, DNS-rebinding fixture | T1 blocked |
 | XML fixtures: XXE (external entity), billion laughs, oversized feed | T2/T3 blocked |
 | **Prompt-injection corpus**: ~30 recorded fixture documents with embedded instructions (score manipulation, fake URLs, "run this" commands, role-play overrides) | Output stays schema-valid; cited URLs ⊆ inputs; scores within bounds; no injected commands reach a report unflagged |
-| XSS fixtures (`<script>`, `<img onerror>`, `javascript:` URLs, SVG payloads) through ingest → UI | T9 blocked (rendered escaped; CSP holds) |
+| XSS fixtures (`<script>`, `<img onerror>`, attribute breakout, `javascript:` URLs) through every page, verified by **parsing the output** for dangerous elements, `on*` handlers and script/data URLs | T9 blocked |
+| Host-header allowlist, auth gate, CSRF checks, CSP: each removed in turn (mutation tests) | T13/T14 hold |
 | Auth tests: requests with spoofed `X-Forwarded-For: 127.0.0.1`, missing/expired session | T13 fails closed |
 | CI gates: ruff, mypy, pytest, pip-audit, Trivy, gitleaks | T15/T16 enforced |
 

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Vulnerabilities{% endblock %}
+{% block content %}
+<h1>Vulnerabilities</h1>
+<form method="get" action="/vulns" class="filters">
+  <input type="search" name="q" value="{{ query.q or '' }}" placeholder="CVE, vendor, product…" maxlength="100" aria-label="Search">
+  <label>Sort
+    <select name="sort">
+      {% for key, label in [("priority", "Priority"), ("newest_kev", "Newest in KEV"), ("epss", "EPSS"), ("cvss", "CVSS"), ("cve", "CVE ID")] %}
+      <option value="{{ key }}"{% if query.sort == key %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label><input type="checkbox" name="kev" value="1"{% if query.kev %} checked{% endif %}> In KEV</label>
+  <label><input type="checkbox" name="exploited" value="1"{% if query.exploited %} checked{% endif %}> Exploited (KEV or SSVC active)</label>
+  <label>Min priority <input type="number" name="min_priority" min="0" max="100" value="{{ query.min_priority }}"></label>
+  <button type="submit">Apply</button>
+</form>
+<table>
+  <thead><tr><th>Priority</th><th>CVE</th><th>What</th><th>Signals</th><th>EPSS</th><th>CVSS</th></tr></thead>
+  <tbody>
+  {% for v in rows %}
+    <tr>
+      <td>{{ m.priority(v) }}</td>
+      <td><a href="/vulns/{{ v.cve_id|urlencode }}">{{ v.cve_id }}</a></td>
+      <td>{{ v.title or "—" }}{% if v.kev_vendor %} <span class="muted">{{ v.kev_vendor }} {{ v.kev_product }}</span>{% endif %}</td>
+      <td>{{ m.kev(v) }}</td>
+      <td>{{ v.epss_percentile|pct }}</td>
+      <td>{{ m.headline(v) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">Nothing matches these filters.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ m.pager(pager) }}
+{% endblock %}

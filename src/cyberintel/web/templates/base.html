@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>{% block title %}Overview{% endblock %} · cyber-intel</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">cyber&#8209;intel</a>
+  {% if authenticated %}
+  <nav aria-label="Main">
+    {% for href, label, key in [("/", "Overview", "home"), ("/vulns", "Vulnerabilities", "vulns"),
+                                 ("/stories", "Stories", "stories"), ("/news", "News", "news"),
+                                 ("/sources", "Sources", "sources")] %}
+    <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="post" action="/logout" class="logout"><button type="submit">Log out</button></form>
+  {% endif %}
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+<footer>
+  Facts come from CISA KEV, CVE.org, NVD and FIRST EPSS. Priority is a transparent rule-based score.
+  Collected text is untrusted data and is always shown escaped.
+</footer>
+</body>
+</html>
