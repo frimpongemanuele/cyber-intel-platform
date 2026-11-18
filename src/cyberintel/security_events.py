@@ -97,12 +97,21 @@ def _logger() -> logging.Logger:
             log.addHandler(stderr)
             path = os.environ.get("CIT_SECURITY_LOG")
             if path:
-                handler = logging.handlers.RotatingFileHandler(
-                    path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
-                )
-                handler.setFormatter(fmt)
-                log.addHandler(handler)
-            _configured = True
+                try:
+                    handler = logging.handlers.RotatingFileHandler(
+                        path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+                    )
+                except OSError as exc:
+                    # Keep stderr working; say once, without the path's contents or details.
+                    print(
+                        f"security events: cannot open CIT_SECURITY_LOG ({type(exc).__name__});"
+                        " writing to stderr only",
+                        file=sys.stderr,
+                    )
+                else:
+                    handler.setFormatter(fmt)
+                    log.addHandler(handler)
+            _configured = True  # even on failure: never stack duplicate handlers
     return log
 
 

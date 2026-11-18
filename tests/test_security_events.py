@@ -274,3 +274,22 @@ def test_ai_injection_and_provider_events(captured: Capture) -> None:
     run(FakeRepo(5), ScriptedProvider(*(ProviderError("x") for _ in range(5))), now=NOW)
     assert captured.names() == ["ai.provider_failing"]
     assert captured.events[0]["errors"] == 3
+
+
+def test_unwritable_log_file_falls_back_to_stderr_once(tmp_path: Any) -> None:
+    import os
+    import subprocess
+    import sys
+
+    src = str(Path(__file__).resolve().parents[1] / "src")
+    missing_dir = tmp_path / "no-such-dir" / "security.json"
+    code = (
+        "from cyberintel.security_events import emit\n"
+        "for _ in range(3): emit('auth.login_failed', client='c')\n"
+    )
+    env = {**os.environ, "CIT_SECURITY_LOG": str(missing_dir), "PYTHONPATH": src}
+    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
+    assert out.returncode == 0
+    lines = out.stderr.strip().splitlines()
+    assert lines[0].startswith("security events: cannot open CIT_SECURITY_LOG (")
+    assert len([ln for ln in lines if '"cit_event"' in ln]) == 3  # no duplicated handlers

@@ -4,6 +4,18 @@ Decisions and findings, newest first. Negative results are recorded on purpose: 
 
 ---
 
+## 2026-11-18 — Detections, step 2: collection in Wazuh
+
+The manager on the VM already read journald (so the kernel's `CIT-WEB-EGRESS` lines needed nothing) and ran file-integrity monitoring. Added, in `detections/wazuh/`:
+
+- **Two JSON inputs instead of one.** Platform events go to `logs/<service>/security.json` and are decoded natively, so `cit_event`, `client` and the other fields become searchable fields. Everything else (squid's access log, PostgreSQL's authentication failures) is read from Docker's own json-file logs, which now carry the service name through the json-file `env` option, without touching those containers.
+- **FIM that does not leak.** `deploy/secrets/` is watched in real time but without `report_changes`; otherwise Wazuh would store the old and new secret values as diffs in its database.
+- **Docker listener from the distribution package.** The obvious fix for its Python dependency, `pip install docker` into Wazuh's bundled interpreter, could replace libraries the Wazuh API depends on. The installer uses Ubuntu's `python3-docker` instead.
+- **A safer installer.** The block sits between markers and is replaced on each run; `ossec.conf` is backed up and restored if the manager does not restart. Seven tests run it against a fake manager (idempotency, uninstall, rollback, bad paths). A mutation showed one check was only covered by accident: the absolute-path test was satisfied by the missing-file check. The test now uses a relative path that *does* exist.
+- **Found while planning:** if the event file could not be opened (wrong owner on the bind mount), the logger raised during set-up, the events were lost, and every later call stacked another stderr handler. It now falls back to stderr once and says why; tested in a subprocess.
+
+---
+
 ## 2026-11-18 — Detections, step 1: the platform reports on itself
 
 Before writing SIEM rules, the platform had to become detectable: until now a failed login was visible only as an access-log line (`POST /login 401`) and an SSRF refusal only as a source error string. `security_events.py` adds a closed vocabulary of 13 events, one JSON object per line.

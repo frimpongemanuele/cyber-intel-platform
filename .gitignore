@@ -22,3 +22,4 @@ secrets/
 deploy/secrets/
 backups/
 compose.override.yaml
+logs/

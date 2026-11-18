@@ -175,6 +175,13 @@ jobs:
           grep -q '"cit_event":"auth.login_succeeded"' /tmp/web.log
           grep -q '"cit_event":"web.host_rejected"' /tmp/web.log
           ! grep -q 'wrong-password-x' /tmp/web.log
+          # ...and in the per-service file the SIEM reads (docs/DETECTIONS.md section 2)
+          test "$(sudo stat -c '%u %a' logs/web)" = "10001 750"
+          sudo grep -q '"cit_event":"auth.login_failed"' logs/web/security.json
+          ! sudo grep -q 'wrong-password-x' logs/web/security.json
+          # every container log line names its service (json-file "env" option)
+          sudo sh -c 'cat /var/lib/docker/containers/*/*-json.log' | grep -q '"attrs":{"CIT_SERVICE":"egress"}'
+          sudo sh -c 'cat /var/lib/docker/containers/*/*-json.log' | grep -q '"attrs":{"CIT_SERVICE":"web"}'
       - name: Backup and restore check
         run: |
           docker compose run --rm --no-deps backup --once
