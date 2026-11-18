@@ -21,7 +21,9 @@ x-hardening: &hardening
   restart: unless-stopped
   logging:
     driver: json-file
-    options: { max-size: "10m", max-file: "5" }
+    # env: CIT_SERVICE adds {"attrs":{"CIT_SERVICE":"<service>"}} to every line, so the
+    # SIEM knows which container a line came from (docs/DETECTIONS.md)
+    options: { max-size: "10m", max-file: "5", env: "CIT_SERVICE" }
   tmpfs:
     - /tmp:size=64m,mode=1777
 
@@ -52,6 +54,7 @@ services:
     mem_limit: 1g
     pids_limit: 256
     environment:
+      CIT_SERVICE: db
       POSTGRES_DB: cit
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
@@ -102,6 +105,7 @@ services:
     image: ${CIT_EGRESS_IMAGE:-cyber-intel-egress:local}
     build: { context: deploy/squid }
     user: "13:13" # Debian proxy user
+    environment: { CIT_SERVICE: egress }
     mem_limit: 256m
     pids_limit: 64
     tmpfs:
@@ -120,10 +124,12 @@ services:
   ingest:
     <<: *app
     command: ["cyberintel.ingest", "--every", "900"]
+    volumes: ["${CIT_LOG_DIR:-./logs}/ingest:/var/log/cit"]
     environment:
       <<: *app-env
       PGUSER: cit_ingest
       CIT_SERVICE: ingest
+      CIT_SECURITY_LOG: /var/log/cit/security.json
       CIT_DB_PASSWORD_FILE: /run/secrets/pg_ingest_password
       CIT_EGRESS_PROXY: http://egress:3128
       CIT_NVD_API_KEY_FILE: /run/secrets/nvd_api_key # may be an empty file
@@ -138,10 +144,12 @@ services:
   web:
     <<: *app
     command: ["cyberintel.web.server"]
+    volumes: ["${CIT_LOG_DIR:-./logs}/web:/var/log/cit"]
     environment:
       <<: *app-env
       PGUSER: cit_web
       CIT_SERVICE: web
+      CIT_SECURITY_LOG: /var/log/cit/security.json
       CIT_DB_PASSWORD_FILE: /run/secrets/pg_web_password
       CIT_WEB_PASSWORD_HASH_FILE: /run/secrets/web_password_hash
       CIT_WEB_SECRET_FILE: /run/secrets/web_session_secret
@@ -172,6 +180,7 @@ services:
     group_add: ["10001"]
     entrypoint: ["/bin/sh", "/backup.sh"]
     environment:
+      CIT_SERVICE: backup
       PGHOST: db
       PGDATABASE: cit
       PGUSER: cit_owner
@@ -193,10 +202,12 @@ services:
     <<: *app
     profiles: [ai]
     command: ["cyberintel.ai", "run", "--every", "3600"]
+    volumes: ["${CIT_LOG_DIR:-./logs}/ai:/var/log/cit"]
     environment:
       <<: *app-env
       PGUSER: cit_ai
       CIT_SERVICE: ai
+      CIT_SECURITY_LOG: /var/log/cit/security.json
       CIT_DB_PASSWORD_FILE: /run/secrets/pg_ai_password
       CIT_AI_PROVIDER: ${CIT_AI_PROVIDER:-none}
       CIT_AI_MODEL: ${CIT_AI_MODEL:-}

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Create the Docker secret files for compose.yaml (run once, on the VM, with sudo).
 #
-#   sudo deploy/scripts/make-secrets.sh            # create missing secrets
+#   sudo deploy/scripts/make-secrets.sh            # create missing secrets (+ log/backup dirs)
 #   sudo deploy/scripts/make-secrets.sh --web-password   # (re)set the dashboard password
 #
 # Existing files are never overwritten (rotating a database password also needs an
@@ -51,6 +51,16 @@ fi
 
 chown root:10001 "$dir" "$dir"/*
 chmod 0440 "$dir"/*
+
+# Security event logs (docs/DETECTIONS.md): one directory per service, writable only by
+# the app user, read by the SIEM agent as root. Docker would otherwise create missing
+# bind-mount sources as root, and the services could not write their events.
+for svc in web ingest ai; do
+    mkdir -p "logs/$svc"
+    chown 10001:10001 "logs/$svc"
+    chmod 0750 "logs/$svc"
+done
+chmod 0755 logs
 
 # Backup target for the `backup` service (runs as the postgres uid 999). If you set
 # CIT_BACKUP_DIR in .env to a mounted share, give that directory the same ownership.
