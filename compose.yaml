@@ -1,0 +1,253 @@
+# Cyber Intelligence Platform: hardened single-host deployment (docs/DEPLOYMENT.md).
+#
+#   docker compose up -d                      # db, migrate, egress, ingest, web, backup
+#   docker compose --profile ai up -d         # + AI runner (hosted API via the egress proxy)
+#   docker compose --profile ollama up -d     # + local model server (no internet access)
+#
+# Baseline for every service (THREAT_MODEL section 4): non-root users, read-only root
+# filesystem, all Linux capabilities dropped,
+# no-new-privileges, memory/PID/CPU limits, bounded logs, secrets as files.
+#
+# Networks: only `egress` (the proxy) and `web` (the published port) are non-internal.
+# The database sits on an internal network with no route out; collectors and the AI
+# runner reach the internet only through the allowlisting proxy.
+
+name: cit
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+
+x-app: &app
+  <<: *hardening
+  image: ${CIT_IMAGE:-cyber-intel-platform:local}
+  build: { context: . }
+  user: "10001:10001"
+  pids_limit: 128
+  environment: &app-env
+    PGHOST: db
+    PGDATABASE: cit
+    PGCONNECT_TIMEOUT: "10"
+    PGSSLMODE: disable # traffic never leaves the internal `data` network
+
+x-db-image: &db-image ${CIT_POSTGRES_IMAGE:-postgres:16-bookworm@sha256:POSTGRES_DIGEST}
+
+services:
+  db:
+    <<: *hardening
+    image: *db-image
+    # Started directly as the postgres uid, so the entrypoint never needs root, gosu or
+    # any capability. (Starting as root would also drop group_add on the switch to
+    # postgres, and the secret files below are readable only by group 10001.)
+    user: "999:999"
+    group_add: ["10001"] # read the group-owned secret files
+    shm_size: 128m
+    mem_limit: 1g
+    pids_limit: 256
+    environment:
+      POSTGRES_DB: cit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+    command:
+      - postgres
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+    secrets:
+      [pg_superuser_password, pg_owner_password, pg_ingest_password, pg_web_password, pg_ai_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/initdb:/docker-entrypoint-initdb.d:ro
+      # for `docker compose exec db sh /backup-tools/restore-check.sh` (read-only)
+      - ./deploy/backup:/backup-tools:ro
+      - ${CIT_BACKUP_DIR:-./backups}:/backups:ro
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/run/postgresql:size=1m,uid=999,gid=999,mode=0775
+    networks: [data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "/var/run/postgresql", "-U", "postgres", "-d", "cit"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["cyberintel.store.migrate", "up", "--grants"]
+    environment:
+      <<: *app-env
+      PGUSER: cit_owner
+      CIT_DB_PASSWORD_FILE: /run/secrets/pg_owner_password
+    secrets: [pg_owner_password]
+    mem_limit: 256m
+    networks: [data]
+    depends_on:
+      db: { condition: service_healthy }
+
+  egress:
+    <<: *hardening
+    image: ${CIT_EGRESS_IMAGE:-cyber-intel-egress:local}
+    build: { context: deploy/squid }
+    user: proxy
+    mem_limit: 256m
+    pids_limit: 64
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/spool/squid:size=16m,mode=1777
+      - /var/log/squid:size=16m,mode=1777
+      - /run:size=1m,mode=1777
+    networks: [egress, ingest_out, ai_out]
+    healthcheck:
+      test: ["CMD", "/usr/sbin/squid", "-k", "check", "-f", "/etc/squid/squid.conf"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  ingest:
+    <<: *app
+    command: ["cyberintel.ingest", "--every", "900"]
+    environment:
+      <<: *app-env
+      PGUSER: cit_ingest
+      CIT_DB_PASSWORD_FILE: /run/secrets/pg_ingest_password
+      CIT_EGRESS_PROXY: http://egress:3128
+      CIT_NVD_API_KEY_FILE: /run/secrets/nvd_api_key # may be an empty file
+    secrets: [pg_ingest_password, nvd_api_key]
+    mem_limit: 768m
+    cpus: 1.0
+    networks: [data, ingest_out]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      egress: { condition: service_healthy }
+
+  web:
+    <<: *app
+    command: ["cyberintel.web.server"]
+    environment:
+      <<: *app-env
+      PGUSER: cit_web
+      CIT_DB_PASSWORD_FILE: /run/secrets/pg_web_password
+      CIT_WEB_PASSWORD_HASH_FILE: /run/secrets/web_password_hash
+      CIT_WEB_SECRET_FILE: /run/secrets/web_session_secret
+      CIT_WEB_BIND: 0.0.0.0 # inside the container; the host side is loopback-only
+      CIT_WEB_PORT: "8080"
+      CIT_WEB_ALLOWED_HOSTS: ${CIT_WEB_ALLOWED_HOSTS:-localhost}
+      CIT_WEB_HSTS: ${CIT_WEB_HSTS:-1}
+      CIT_WEB_INSECURE_COOKIES: ${CIT_WEB_INSECURE_COOKIES:-0}
+      CIT_WEB_AI: ${CIT_WEB_AI:-0}
+    secrets: [pg_web_password, web_password_hash, web_session_secret]
+    mem_limit: 512m
+    cpus: 1.0
+    # Loopback only. Remote access goes through `tailscale serve` (HTTPS) on the host.
+    ports: ["127.0.0.1:${CIT_WEB_HOST_PORT:-8080}:8080"]
+    networks: [data, web]
+    healthcheck:
+      test: ["CMD", "python", "-m", "cyberintel.web.healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  backup:
+    <<: *hardening
+    image: *db-image
+    user: "999:999"
+    group_add: ["10001"]
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      PGHOST: db
+      PGDATABASE: cit
+      PGUSER: cit_owner
+      PGPASSWORD_FILE: /run/secrets/pg_owner_password
+      BACKUP_DIR: /backups
+      BACKUP_KEEP_DAYS: ${CIT_BACKUP_KEEP_DAYS:-14}
+      BACKUP_EVERY_SECONDS: "86400"
+    secrets: [pg_owner_password]
+    volumes:
+      - ./deploy/backup/backup.sh:/backup.sh:ro
+      - ${CIT_BACKUP_DIR:-./backups}:/backups
+    mem_limit: 256m
+    pids_limit: 64
+    networks: [data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  ai:
+    <<: *app
+    profiles: [ai]
+    command: ["cyberintel.ai", "run", "--every", "3600"]
+    environment:
+      <<: *app-env
+      PGUSER: cit_ai
+      CIT_DB_PASSWORD_FILE: /run/secrets/pg_ai_password
+      CIT_AI_PROVIDER: ${CIT_AI_PROVIDER:-none}
+      CIT_AI_MODEL: ${CIT_AI_MODEL:-}
+      CIT_AI_OLLAMA_URL: ${CIT_AI_OLLAMA_URL:-http://ollama:11434}
+      CIT_AI_PROXY: ${CIT_AI_PROXY:-}
+      CIT_AI_API_KEY_FILE: /run/secrets/ai_api_key # may be an empty file
+      CIT_AI_DAILY_TOKEN_CAP: ${CIT_AI_DAILY_TOKEN_CAP:-200000}
+    secrets: [pg_ai_password, ai_api_key]
+    mem_limit: 256m
+    networks: [data, ai_out, ollama]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  ollama:
+    <<: *hardening
+    profiles: [ollama]
+    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:OLLAMA_TAG}
+    read_only: false # model store and runtime files
+    mem_limit: ${CIT_OLLAMA_MEM:-8g}
+    pids_limit: 512
+    environment: { OLLAMA_HOST: "0.0.0.0:11434" }
+    volumes: [ollama:/root/.ollama]
+    networks: [ollama] # internal: the model server has no internet access
+
+  # One-shot helper to download a model into the ollama volume (needs internet):
+  #   docker compose --profile ollama-pull run --rm ollama-pull pull llama3.1:8b
+  ollama-pull:
+    <<: *hardening
+    profiles: [ollama-pull]
+    image: ${CIT_OLLAMA_IMAGE:-ollama/ollama:OLLAMA_TAG}
+    read_only: false
+    restart: "no"
+    volumes: [ollama:/root/.ollama]
+    networks: [egress]
+
+networks:
+  data: { internal: true }
+  ingest_out: { internal: true }
+  ai_out: { internal: true }
+  ollama: { internal: true }
+  egress: {}
+  web:
+    ipam:
+      config: [{ subnet: "${CIT_WEB_SUBNET:-172.31.250.0/24}" }]
+
+volumes:
+  pgdata: {}
+  ollama: {}
+
+secrets:
+  pg_superuser_password: { file: ./deploy/secrets/pg_superuser_password }
+  pg_owner_password: { file: ./deploy/secrets/pg_owner_password }
+  pg_ingest_password: { file: ./deploy/secrets/pg_ingest_password }
+  pg_web_password: { file: ./deploy/secrets/pg_web_password }
+  pg_ai_password: { file: ./deploy/secrets/pg_ai_password }
+  web_password_hash: { file: ./deploy/secrets/web_password_hash }
+  web_session_secret: { file: ./deploy/secrets/web_session_secret }
+  nvd_api_key: { file: ./deploy/secrets/nvd_api_key }
+  ai_api_key: { file: ./deploy/secrets/ai_api_key }

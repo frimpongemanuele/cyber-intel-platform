@@ -68,11 +68,31 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None  # urllib then raises HTTPError with the 3xx status
 
 
+def make_post(proxy: str | None = None) -> PostJson:
+    """Transport bound to an explicit egress proxy (or none). Environment proxy variables
+    are always ignored: the proxy is configuration, never inherited."""
+    if proxy is not None:
+        check_endpoint(proxy, require_https=False)
+
+    def post(
+        url: str, headers: Mapping[str, str], body: bytes, timeout: float
+    ) -> tuple[int, bytes]:
+        return urllib_post_json(url, headers, body, timeout, proxy=proxy)
+
+    return post
+
+
 def urllib_post_json(
-    url: str, headers: Mapping[str, str], body: bytes, timeout: float
+    url: str,
+    headers: Mapping[str, str],
+    body: bytes,
+    timeout: float,
+    *,
+    proxy: str | None = None,
 ) -> tuple[int, bytes]:
+    proxies = {"http": proxy, "https": proxy} if proxy else {}
     opener = urllib.request.build_opener(
-        urllib.request.ProxyHandler({}),  # ignore *_PROXY environment variables
+        urllib.request.ProxyHandler(proxies),  # explicit only; *_PROXY env vars ignored
         urllib.request.HTTPSHandler(context=ssl.create_default_context()),
         _NoRedirect(),
     )
@@ -245,16 +265,19 @@ def provider_from_env(env: Mapping[str, str] | None = None) -> Provider:
 
     ollama:    CIT_AI_MODEL, CIT_AI_OLLAMA_URL (default http://127.0.0.1:11434)
     anthropic: CIT_AI_MODEL, CIT_AI_API_KEY[_FILE], optional CIT_AI_BASE_URL (https only)
+    both:      optional CIT_AI_PROXY (explicit egress proxy, e.g. http://egress:3129)
     """
     env = os.environ if env is None else env
     kind = (env.get("CIT_AI_PROVIDER") or "none").strip().lower()
     model = (env.get("CIT_AI_MODEL") or "").strip()
     if kind == "none":
         return NoneProvider()
+    post = make_post(env.get("CIT_AI_PROXY") or None)
     if kind == "ollama":
-        return OllamaProvider(env.get("CIT_AI_OLLAMA_URL") or "http://127.0.0.1:11434", model)
+        url = env.get("CIT_AI_OLLAMA_URL") or "http://127.0.0.1:11434"
+        return OllamaProvider(url, model, post=post)
     if kind == "anthropic":
         key = _secret(env, "CIT_AI_API_KEY") or ""
         base = env.get("CIT_AI_BASE_URL") or "https://api.anthropic.com"
-        return AnthropicProvider(api_key=key, model=model, base_url=base)
+        return AnthropicProvider(api_key=key, model=model, base_url=base, post=post)
     raise ValueError(f"unknown CIT_AI_PROVIDER {kind[:20]!r} (none | ollama | anthropic)")
