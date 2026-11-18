@@ -29,6 +29,14 @@ class Source(BaseModel):
     min_interval_seconds: float = Field(default=2.0, ge=0.1, le=3600)
     enabled: bool = True
     extra_hosts: tuple[str, ...] = ()  # known redirect targets, reviewed explicitly
+    max_bytes: int | None = Field(default=None, ge=1024, le=64 * 1024 * 1024)
+    xml_allow_doctype: bool = False  # feeds only; see parsing/feeds.py
+
+    @model_validator(mode="after")
+    def _doctype_only_for_feeds(self) -> Source:
+        if self.xml_allow_doctype and self.kind != "feed":
+            raise ValueError("xml_allow_doctype applies only to kind = 'feed'")
+        return self
 
     @field_validator("url")
     @classmethod

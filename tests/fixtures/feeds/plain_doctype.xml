@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<!DOCTYPE rss>
+<rss version="2.0"><channel><title>Doctype feed</title>
+<item><title>Item</title><link>https://msrc.example/post</link></item></channel></rss>

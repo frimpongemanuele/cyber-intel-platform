@@ -151,3 +151,15 @@ def test_disabled_sources_are_not_allowlisted() -> None:
     allow = reg.allowlist()
     assert allow.allows("on.example")
     assert not allow.allows("off.example") and not allow.allows("redirect.off.example")
+
+
+def test_doctype_opt_in_only_valid_for_feeds() -> None:
+    with pytest.raises(ValueError, match="only to kind"):
+        Source(
+            name="k1", kind="kev", url="https://a.example/k", trust_tier="primary",
+            xml_allow_doctype=True,
+        )  # fmt: skip
+    reg = load_registry(ROOT / "config" / "sources.toml")
+    assert reg.get("msrc-blog").xml_allow_doctype is True
+    assert reg.get("elastic-security-labs").max_bytes == 16 * 1024 * 1024
+    assert all(not s.xml_allow_doctype for s in reg.sources if s.name != "msrc-blog")

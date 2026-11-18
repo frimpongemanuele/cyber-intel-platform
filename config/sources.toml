@@ -61,7 +61,7 @@ trust_tier = "primary"
 [[source]]
 name = "google-project-zero"
 kind = "feed"
-url = "https://googleprojectzero.blogspot.com/feeds/posts/default"
+url = "https://projectzero.google/feed.xml"  # moved from googleprojectzero.blogspot.com (found by network CI)
 trust_tier = "primary"
 
 [[source]]
@@ -69,6 +69,7 @@ name = "msrc-blog"
 kind = "feed"
 url = "https://msrc.microsoft.com/blog/feed"
 trust_tier = "primary"
+xml_allow_doctype = true  # declares a <!DOCTYPE>; entities/external refs still forbidden
 
 [[source]]
 name = "microsoft-security-blog"
@@ -111,6 +112,7 @@ name = "elastic-security-labs"
 kind = "feed"
 url = "https://www.elastic.co/security-labs/rss/feed.xml"
 trust_tier = "primary"
+max_bytes = 16777216  # ~8.5 MB full-content feed (found by network CI)
 
 [[source]]
 name = "trail-of-bits"

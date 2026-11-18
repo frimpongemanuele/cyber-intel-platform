@@ -210,3 +210,17 @@ def test_nvd_window_validation(start: datetime, end: datetime, match: str) -> No
     f = FakeFetcher([nvd_page(0, 1, 1, 1)])
     with pytest.raises(CollectError, match=match):
         list(iter_nvd_modified(f, NVD, start, end))
+
+
+def test_feed_job_applies_per_source_limits_and_doctype_opt_in() -> None:
+    doctype_feed = (FIX / "feeds" / "plain_doctype.xml").read_bytes()
+    strict = src("feed", "https://msrc.example/feed")
+    relaxed = src("feed", "https://msrc.example/feed", xml_allow_doctype=True, max_bytes=4096)
+
+    from cyberintel.parsing.feeds import FeedError
+
+    with pytest.raises(FeedError, match="DTDForbidden"):
+        collect_feed(FakeFetcher([doctype_feed]), strict)
+    f = FakeFetcher([doctype_feed])
+    out = collect_feed(f, relaxed)
+    assert out.data is not None and len(out.data.items) == 1

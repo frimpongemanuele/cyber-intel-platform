@@ -27,6 +27,12 @@ Checking every endpoint before writing collectors turned up the April 2026 NVD c
 ### Paging is checked, not trusted
 The NVD iterator verifies `startIndex` on every page (a repeated page is an error, not an infinite loop), caps pages, enforces the 120-day window, and keeps the API key in a header, never in the URL where logs and proxies would capture it.
 
+### First live run: 18/21 sources passed; the 3 failures were controls working
+The `network` job's first run validated pinning+SNI against real TLS, the NVD date format, and every structured source. The three feed failures were each a control doing its job, and each was resolved with a *scoped* decision rather than a global relaxation:
+- **Google Project Zero** moved to `projectzero.google`; the redirect was blocked by the allowlist. Fix: point at the new URL (no redirect hop to allow).
+- **MSRC** declares a `<!DOCTYPE>` → `DTDForbidden`. Fix: a per-source opt-in that admits **only a bare `<!DOCTYPE name>`** (no SYSTEM/PUBLIC, no internal subset) while entities and external references stay forbidden. The two flags that mutation testing had shown to be "redundant" behind `forbid_dtd` are now the active defence for this source, and a test disables the pre-check to prove they hold on their own.
+- **Elastic Security Labs** is an 8.5 MB full-content feed. Fix: a per-source size limit; the 5 MB default is unchanged.
+
 ### What could not be verified locally
 The workspace has no package access, so `net/fetch.py` (httpx) is type-checked and tested only in CI. The pure parts (rate limiter, gunzip, collectors via a fake `Fetcher`) are fully tested locally.
 

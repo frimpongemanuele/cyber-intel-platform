@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -33,6 +34,22 @@ MAX_ID_CHARS = 2048
 # All three layers on. forbid_dtd alone stops every known attack, so the other two are
 # defence in depth; tests pin this dict so no flag can be flipped silently.
 XML_HARDENING = {"forbid_dtd": True, "forbid_entities": True, "forbid_external": True}
+
+# Per-source opt-in for feeds that declare a (harmless) <!DOCTYPE>. Entity declarations
+# and external references -- the actual XXE and entity-bomb vectors -- stay forbidden;
+# tests prove every hostile fixture is still refused under this profile.
+XML_HARDENING_DOCTYPE_ALLOWED = {
+    "forbid_dtd": False,
+    "forbid_entities": True,
+    "forbid_external": True,
+}
+
+# With the opt-in, only a *bare* declaration is admitted: no SYSTEM/PUBLIC identifier
+# (external DTD) and no internal subset. Python's parser would not fetch an external DTD
+# anyway, but the control should not rest on a library default.
+_DOCTYPE = re.compile(rb"<!DOCTYPE\b[^>]*>", re.IGNORECASE)
+_BARE_DOCTYPE = re.compile(rb"^<!DOCTYPE\s+[A-Za-z_][\w.:-]*\s*>$", re.IGNORECASE)
+_DOCTYPE_SCAN_BYTES = 64 * 1024
 
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 CONTENT_NS = "{http://purl.org/rss/1.0/modules/content/}"
@@ -61,11 +78,18 @@ class Feed(BaseModel):
     truncated: bool
 
 
-def parse_feed(data: bytes) -> Feed:
-    if len(data) > MAX_FEED_BYTES:
-        raise FeedError(f"feed is {len(data)} bytes; limit is {MAX_FEED_BYTES}")
+def parse_feed(
+    data: bytes, *, max_bytes: int = MAX_FEED_BYTES, allow_doctype: bool = False
+) -> Feed:
+    if len(data) > max_bytes:
+        raise FeedError(f"feed is {len(data)} bytes; limit is {max_bytes}")
+    if allow_doctype:
+        decl = _DOCTYPE.search(data[:_DOCTYPE_SCAN_BYTES])
+        if decl and not _BARE_DOCTYPE.match(decl.group(0)):
+            raise FeedError("only a bare <!DOCTYPE name> is allowed for this source")
+    hardening = XML_HARDENING_DOCTYPE_ALLOWED if allow_doctype else XML_HARDENING
     try:
-        root = SafeET.fromstring(data, **XML_HARDENING)
+        root = SafeET.fromstring(data, **hardening)
     except defusedxml.DefusedXmlException as exc:
         raise FeedError(f"unsafe XML construct rejected: {type(exc).__name__}") from None
     except ParseError as exc:

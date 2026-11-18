@@ -19,7 +19,7 @@ from cyberintel.collectors.nvd import NvdPage, parse_nvd_page
 from cyberintel.net.decompress import gunzip_capped
 from cyberintel.net.types import Fetcher, FetchResult, Validators
 from cyberintel.normalize import CVE_ID
-from cyberintel.parsing.feeds import Feed, parse_feed
+from cyberintel.parsing.feeds import MAX_FEED_BYTES, Feed, parse_feed
 from cyberintel.sources import Source
 
 MAX_EPSS_DECOMPRESSED = 256 * 1024 * 1024
@@ -71,8 +71,17 @@ def collect_feed(
     fetcher: Fetcher, source: Source, validators: Validators | None = None
 ) -> Collected[Feed]:
     _require(source, "feed")
-    res = fetcher.get(source.url, validators=validators, min_interval=source.min_interval_seconds)
-    return Collected(source.name, res, None if res.not_modified else parse_feed(res.body))
+    limit = source.max_bytes or MAX_FEED_BYTES
+    res = fetcher.get(
+        source.url,
+        validators=validators,
+        max_bytes=limit,
+        min_interval=source.min_interval_seconds,
+    )
+    if res.not_modified:
+        return Collected(source.name, res, None)
+    feed = parse_feed(res.body, max_bytes=limit, allow_doctype=source.xml_allow_doctype)
+    return Collected(source.name, res, feed)
 
 
 def collect_cve5(fetcher: Fetcher, source: Source, cve_id: str) -> Cve5Record:
