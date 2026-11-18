@@ -31,11 +31,11 @@ TB6  agent / reporter ──►  GitHub       (outbound write)
 
 | # | Threat (STRIDE) | Scenario | Mitigation |
 |---|---|---|---|
-| T1 | **SSRF** (E/I) | A feed item links to `http://169.254.169.254/`, `localhost:5432` or a homelab IP, and a "fetch the original article" step follows it | Collectors only fetch URLs on the **source allowlist**. Resolve DNS then reject private, loopback, link-local and CGNAT ranges, re-checking after redirects (DNS-rebinding defence). Cap redirects at 3. All traffic goes through the egress proxy, which enforces the same allowlist |
+| T1 | **SSRF** (E/I) — **implemented (Phases 6b, 10)** | A feed item links to `http://169.254.169.254/`, `localhost:5432` or a homelab IP, and a "fetch the original article" step follows it | Collectors only fetch URLs on the **source allowlist**. Resolve DNS then reject private, loopback, link-local and CGNAT ranges, re-checking after redirects (DNS-rebinding defence). Cap redirects at 3. All traffic goes through the egress proxy, which enforces the same allowlist **As deployed:** collectors sit on an internal network with no route or DNS out; the squid proxy (generated from `config/sources.toml`, drift-checked in CI) allows only CONNECT to :443 on allowlisted hosts and denies private/metadata destinations *after its own DNS resolution*. In proxy mode the app keeps every URL check except local DNS. CI probes this on the live stack |
 | T2 | **XXE / entity expansion** (I/D) | Malicious RSS/Atom carrying external entities or a "billion laughs" payload. Same bug class as the Able2Shell N-central XXE→RCE chain | `defusedxml`; external entities and DTDs disabled; parse timeout and size caps |
 | T3 | **Resource exhaustion** (D) | Multi-GB response, endless chunked stream, gzip bomb | Max body size (e.g. 5 MB), decompressed-size cap, read timeout, per-source rate limit, disk quota |
 | T4 | **Poisoned / compromised source** (T) | A legitimate blog or a typosquatted feed publishes false CVE claims or fake "PoC" links (cf. trojanized PoC repos) | `trust_tier` per source. Facts never come from news text: CVSS, KEV and EPSS come only from authoritative APIs. Corroboration rules feed `confidence`. Unknown GitHub PoCs are always flagged **DO NOT RUN** |
-| T5 | **Parser exploitation** (E) | A bug in a parsing library is triggered by crafted input | Collector runs as non-root, on a read-only FS, with `cap_drop: ALL`, `no-new-privileges`, a seccomp default profile, and no secrets except the DB insert role. Dependency scanning (T15) |
+| T5 | **Parser exploitation** (E) — **implemented (Phase 10)** | A bug in a parsing library is triggered by crafted input | Collector runs as non-root, on a read-only FS, with `cap_drop: ALL`, `no-new-privileges`, a seccomp default profile, and no secrets except the DB insert role. Dependency scanning (T15) |
 
 ### TB2 — Untrusted content → LLM (prompt injection)
 
@@ -58,15 +58,15 @@ TB6  agent / reporter ──►  GitHub       (outbound write)
 
 | # | Threat | Mitigation |
 |---|---|---|
-| T13 | Unauthorized access (S/I) — **implemented (Phase 8)** | **No public exposure**; reachable only over Tailscale/WireGuard, plus app auth (single user, argon2id password or OIDC via Tailscale identity). Do not trust `X-Forwarded-For` or loopback origin for auth (the **GPUStack CVE-2026-102895** lesson). Auth checks fail closed (the **SSHole** lesson) |
+| T13 | Unauthorized access (S/I) — **implemented (Phases 8, 10)** | **No public exposure**; reachable only over Tailscale/WireGuard, plus app auth (single user, argon2id password or OIDC via Tailscale identity). Do not trust `X-Forwarded-For` or loopback origin for auth (the **GPUStack CVE-2026-102895** lesson). Auth checks fail closed (the **SSHole** lesson) **As deployed:** dashboard published on 127.0.0.1 only and reached through `tailscale serve` (HTTPS, tailnet ACL); database port never published |
 | T14 | CSRF / injection (T) — **implemented (Phase 8)** | SameSite=Strict `__Host-` cookies + Sec-Fetch-Site/Origin check on the only two POSTs (login, logout); bound-parameter SQL only, sort keys from an allowlist, LIKE wildcards escaped; Pydantic validation on every query parameter; read-only database sessions for the web tier |
 
 ### TB5 — Supply chain
 
 | # | Threat | Mitigation |
 |---|---|---|
-| T15 | Malicious or compromised dependency (cf. Contagious Interview npm/PyPI waves, the cPGuard update hijack) | Pinned hashes (`uv lock` / `pip --require-hashes`); `pip-audit` + Trivy in CI; minimal base images (distroless or slim); Dependabot; **no auto-update** of production containers without CI passing |
-| T16 | Secrets in repo or image | gitleaks in CI and pre-commit; secrets via Docker secrets; images contain no `.env` |
+| T15 | Malicious or compromised dependency (cf. Contagious Interview npm/PyPI waves, the cPGuard update hijack) | Pinned hashes (`uv lock` / `pip --require-hashes`); `pip-audit` + Trivy in CI; minimal base images (distroless or slim); Dependabot; **no auto-update** of production containers without CI passing **As built (Phase 10):** base images pinned by digest, every Python package installed with `--require-hashes`, pip removed from the runtime image, hadolint + Trivy (fail on fixable CRITICAL) in CI, weekly rebuild, Dependabot for images/lock/Actions |
+| T16 | Secrets in repo or image | gitleaks in CI and pre-commit; secrets via Docker secrets; images contain no `.env` **As built:** Docker secret files `root:10001 0440` created by `make-secrets.sh`; passwords read by psql from files (never argv/env); `*_FILE` variables everywhere; `deploy/secrets/` git-ignored |
 
 ### TB6 — Outbound writes
 
@@ -75,9 +75,11 @@ TB6  agent / reporter ──►  GitHub       (outbound write)
 | T17 | Over-scoped credential | Fine-grained GitHub token limited to `cyber-intel-archive` with contents:write only; rotated on a schedule |
 | T18 | Personal data leakage in published reports | Commit identity uses GitHub's noreply email; reports contain no personal identifiers beyond the public profile summary |
 
-## 4. Container hardening baseline (all services)
+## 4. Container hardening baseline (all services) — **implemented (Phase 10, DEPLOYMENT.md)**
 
 `user: non-root` · `read_only: true` + tmpfs for `/tmp` · `cap_drop: [ALL]` · `security_opt: [no-new-privileges:true]` · memory/CPU limits · no Docker socket mount · per-service networks (collector cannot reach the API or the LLM endpoint) · healthchecks · images rebuilt weekly and scanned.
+
+As built: app containers run as uid 10001 with `CapEff` 0; PostgreSQL runs as uid 999 from the start (no root entrypoint, no capabilities); squid as uid 13 with the ICMP pinger disabled. Least-privilege database roles per service (`store/grants.sql`): `cit_web` read-only and blind to raw model output, `cit_ai` append-only on `ai_analyses`, `cit_ingest` without `ai_*` or DDL. Only two networks are non-internal: the proxy's and the web port's; a host `DOCKER-USER` rule stops the web container opening new outbound connections. Every item is checked on the running stack in CI (`deploy.yml`).
 
 ## 5. Verification (tests that prove the mitigations)
 
@@ -92,10 +94,14 @@ TB6  agent / reporter ──►  GitHub       (outbound write)
 | Auth tests: requests with spoofed `X-Forwarded-For: 127.0.0.1`, missing/expired session | T13 fails closed |
 | CI gates: ruff, mypy, pytest, pip-audit, Trivy, gitleaks | T15/T16 enforced |
 
-All fixtures are synthetic or recorded locally; tests never touch third-party systems.
+| **Deployment smoke test** (`deploy.yml`): real images, real Compose stack on the CI runner | Container hardening, secret file modes, role privileges, egress policy (6 probes), web egress block, KEV ingestion through the proxy, authenticated dashboard, backup + restore check (T1/T5/T13/T14/T15/T16) |
+
+All unit-test fixtures are synthetic or recorded locally. The deployment smoke test is the one place that fetches a real source (CISA KEV), through the proxy, as a functional check.
 
 ## 6. Residual risks (accepted, with reasons)
 
 - **Prompt injection cannot be fully prevented**, only contained. The design limits blast radius (no tools for the in-platform LLM; schema-bound outputs) rather than claiming immunity. A plausible but wrong AI summary cannot be detected mechanically; it is labelled, shown under the authoritative facts, and lists its sources (AI.md §3.2). The AI layer is optional and off by default.
 - **The scheduled agent (T7)** has tools and auto-approve. It is accepted for now because it exists to bootstrap the archive, and should be narrowed as the platform takes over fact-gathering.
+- **Proxy mode trades IP pinning for network isolation.** Collectors cannot pin the validated IP because the proxy resolves DNS; the proxy's post-resolution private-range deny replaces it. A compromised proxy would therefore be a single point of failure for T1; it runs unprivileged, read-only and with no secrets.
+- **The host is the trust anchor.** Anyone with `docker` group or root on the VM can read every secret. Keep the VM single-purpose, SSH-key-only, and reachable only over the tailnet.
 - **Authoritative sources can be wrong or late** (e.g. NVD enrichment lag). Mitigated by multiple sources and showing per-field provenance and timestamps.
